@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "MeinHandwerker Faktura Assistent",
+  "version": "0.2.0",
+  "description": "Spiegelt Rechnungsdaten aus MeinHandwerker auf der Rechnungsseite.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "https://verwaltung.mein-handwerker-app.de/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://verwaltung.mein-handwerker-app.de/billing/edit/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "MeinHandwerker Faktura Assistent"
+  }
+}
