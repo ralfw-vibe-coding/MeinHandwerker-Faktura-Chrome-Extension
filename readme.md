@@ -52,7 +52,7 @@ MeinHandwerker Faktura Assistent
 Aktuelle Version:
 
 ```text
-0.2.0
+0.5.0
 ```
 
 Sie wird automatisch auf Rechnungsseiten geladen, deren URL so beginnt:
@@ -99,13 +99,33 @@ Aktuelle Kalkulationsfelder:
 Breite in cm
 Hoehe außen in cm
 Hoehe innen in cm
+Außenseite: links oder rechts
+Faecher
+Regalboeden je Fach
 ```
+
+Formularlayout:
+
+```text
+Breite, Hoehe außen und Hoehe innen stehen kompakt in einer Zeile mit Platzhaltern.
+Außenseite wird nur ueber zwei Chips gewaehlt.
+Regalboeden je Fach werden als HTML-Tabelle mit Spalten 0, 1, 2, 3, 4, 5 und runden Auswahlpunkten gesetzt.
+Zahlenfelder selektieren beim Fokus ihren kompletten Inhalt.
+Der Speichern-Button sitzt im Kalkulator-Kopf als blaues Disketten-Icon und ist nur aktiv,
+wenn es ungespeicherte Aenderungen gibt. Beim Schließen mit ungespeicherten Aenderungen
+erscheint eine Warnung.
+```
+
+Die Korpuszeichnung im Kalkulator wird maßstabsgerecht mit einem gemeinsamen Skalierungsfaktor
+fuer Breite und Hoehe gezeichnet.
 
 Aktuelle Preisformel:
 
 ```text
 Flaeche = Breite * ((Hoehe außen + Hoehe innen) / 2)
 Preis netto = Flaeche in m² * 500 EUR
+Trennwaende = 25 EUR pro laufendem Meter
+Regalboeden = 20 EUR pro laufendem Meter
 ```
 
 Gespeicherte Positionsbeschreibung:
@@ -113,8 +133,17 @@ Gespeicherte Positionsbeschreibung:
 ```text
 Dachschrägenregal
 Abbmessungen: 200cm Breite, 0cm Höhe außen, 150cm Höhe innen
+Außenseite: links
+Fächer: 4
+Regalböden je Fach: 1, 2, 0, 1
 ```
 
 Beim Speichern wird die komplette Positionsliste der Rechnung ueber `update_invoice`
 zurueckgeschrieben, weil die API keine einzelne Positions-Patch-Operation dokumentiert.
 Nach erfolgreichem Speichern wird die MeinHandwerker-Seite neu geladen.
+
+Layout-Regel fuer die Extension:
+
+```text
+Abstaende und Positionierung folgen einem 12x12px-Raster.
+```

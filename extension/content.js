@@ -4,7 +4,8 @@ let mhfaState = {
   invoice: null,
   customer: null,
   mode: "overview",
-  editPositionId: null
+  editPositionId: null,
+  editorSnapshot: ""
 };
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -80,6 +81,9 @@ function openAssistantPanel() {
   document.getElementById("mhfa-settings")?.addEventListener("click", () => renderSettings());
   document.getElementById("mhfa-refresh")?.addEventListener("click", () => loadInvoice(invoiceId));
   document.getElementById("mhfa-close")?.addEventListener("click", () => {
+    if (!confirmDiscardEditorChanges()) {
+      return;
+    }
     panel.hidden = true;
   });
   loadInvoice(invoiceId);
@@ -129,6 +133,10 @@ function renderOverview() {
   const content = document.getElementById("mhfa-content");
   if (!content || !mhfaState.invoice) return;
 
+  mhfaState.mode = "overview";
+  mhfaState.editPositionId = null;
+  mhfaState.editorSnapshot = "";
+
   const invoice = mhfaState.invoice;
   const positions = getPositions(invoice);
   const roofPositions = positions.filter(isRoofSlopePosition);
@@ -154,12 +162,12 @@ function renderOverview() {
 
     <section class="mhfa-section">
       <div class="mhfa-section-title">
-        <h2>Dachschraegenregale</h2>
-        <button type="button" id="mhfa-add" class="mhfa-icon-button" title="Position hinzufuegen">+</button>
+        <h2>Dachschrägenregale</h2>
+        <button type="button" id="mhfa-add" class="mhfa-icon-button" title="Position hinzufügen">+</button>
       </div>
       ${roofPositions.length
         ? `<div class="mhfa-position-list">${roofPositions.map(renderRoofPositionButton).join("")}</div>`
-        : `<p class="mhfa-muted">Noch keine Dachschraegenregal-Position in dieser Rechnung.</p>`}
+        : `<p class="mhfa-muted">Noch keine Dachschrägenregal-Position in dieser Rechnung.</p>`}
     </section>
 
     <section class="mhfa-section">
@@ -220,12 +228,12 @@ function renderSettings(message = "") {
 function renderRoofPositionButton(position) {
   const dimensions = parseRoofDimensions(position.description);
   const detail = dimensions
-    ? `${dimensions.widthCm}cm B, ${dimensions.outerHeightCm}cm H außen, ${dimensions.innerHeightCm}cm H innen`
+    ? `${dimensions.widthCm}cm B, ${dimensions.outerHeightCm}cm H außen ${dimensions.outerSide}, ${dimensions.innerHeightCm}cm H innen`
     : "Abmessungen nicht erkannt";
 
   return `
     <button type="button" class="mhfa-position" data-mhfa-position-id="${escapeHtml(position.id || position.sort_order)}">
-      <span>${escapeHtml(position.description.split("\n")[0] || "Dachschraegenregal")}</span>
+      <span>${escapeHtml(position.description.split("\n")[0] || "Dachschrägenregal")}</span>
       <small>${escapeHtml(detail)} · ${formatMoney(position.net_amount || position.unit_price)}</small>
     </button>
   `;
@@ -243,45 +251,91 @@ function renderEditor(positionId = null) {
 
   content.innerHTML = `
     <section class="mhfa-section mhfa-section-first">
-      <button type="button" id="mhfa-back">Zurueck</button>
-      <h2>${position ? "Dachschraegenregal bearbeiten" : "Dachschraegenregal hinzufuegen"}</h2>
+      <div class="mhfa-section-title">
+        <h2>${position ? "Dachschrägenregal bearbeiten" : "Dachschrägenregal hinzufügen"}</h2>
+        <div class="mhfa-editor-actions">
+          <button type="submit" form="mhfa-calculator" id="mhfa-save" class="mhfa-tool-button mhfa-save-button" title="Speichern" aria-label="Speichern" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8A2 2 0 0 1 21 8.8V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"></path>
+              <path d="M17 21v-7H7v7"></path>
+              <path d="M7 3v5h8"></path>
+            </svg>
+          </button>
+          <button type="button" id="mhfa-back" class="mhfa-tool-button" title="Zurück" aria-label="Zurück">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 6 6 18"></path>
+              <path d="m6 6 12 12"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
     </section>
 
     <form id="mhfa-calculator" class="mhfa-form">
-      <label>
-        Breite in cm
-        <input name="widthCm" type="number" min="1" step="1" value="${escapeHtml(dimensions?.widthCm ?? "")}" required>
-      </label>
-      <label>
-        Hoehe außen in cm
-        <input name="outerHeightCm" type="number" min="0" step="1" value="${escapeHtml(dimensions?.outerHeightCm ?? "")}" required>
-      </label>
-      <label>
-        Hoehe innen in cm
-        <input name="innerHeightCm" type="number" min="0" step="1" value="${escapeHtml(dimensions?.innerHeightCm ?? "")}" required>
-      </label>
+      <div class="mhfa-measure-row">
+        <input name="widthCm" type="number" min="1" step="1" placeholder="Breite cm" value="${escapeHtml(dimensions?.widthCm ?? "")}" required>
+        <input name="outerHeightCm" type="number" min="0" step="1" placeholder="H außen cm" value="${escapeHtml(dimensions?.outerHeightCm ?? "")}" required>
+        <input name="innerHeightCm" type="number" min="0" step="1" placeholder="H innen cm" value="${escapeHtml(dimensions?.innerHeightCm ?? "")}" required>
+      </div>
+      <fieldset class="mhfa-chip-field mhfa-side-field">
+        <div class="mhfa-chip-row">
+          <label class="mhfa-chip">
+            <input type="radio" name="outerSide" value="links" ${!dimensions || dimensions.outerSide === "links" ? "checked" : ""}>
+            <span>links</span>
+          </label>
+          <label class="mhfa-chip">
+            <input type="radio" name="outerSide" value="rechts" ${dimensions?.outerSide === "rechts" ? "checked" : ""}>
+            <span>rechts</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="mhfa-form-divider"></div>
+      <input name="compartmentCount" type="number" min="1" step="1" placeholder="Fächer" value="${escapeHtml(dimensions?.compartmentCount ?? "")}" required>
+      <div class="mhfa-shelf-config">
+        <div class="mhfa-small-label">Regalböden je Fach:</div>
+        <div id="mhfa-shelf-fields" class="mhfa-shelf-fields"></div>
+      </div>
 
       <div class="mhfa-preview">
         <svg viewBox="0 0 260 150" role="img" aria-label="Korpusform">
           <polygon id="mhfa-shape" points="24,126 236,126 236,24 24,126"></polygon>
+          <g id="mhfa-partitions"></g>
+          <g id="mhfa-shelves"></g>
         </svg>
         <dl class="mhfa-totals">
-          <div><dt>Flaeche</dt><dd id="mhfa-area">-</dd></div>
+          <div><dt>Fläche</dt><dd id="mhfa-area">-</dd></div>
+          <div><dt>Einbauten</dt><dd id="mhfa-buildout-price">-</dd></div>
           <div><dt>Preis netto</dt><dd id="mhfa-price">-</dd></div>
         </dl>
-      </div>
-
-      <div class="mhfa-actions">
-        <button type="submit">Speichern</button>
+        <div id="mhfa-bom" class="mhfa-bom"></div>
       </div>
     </form>
   `;
 
   const form = document.getElementById("mhfa-calculator");
-  document.getElementById("mhfa-back")?.addEventListener("click", renderOverview);
-  form?.addEventListener("input", updateCalculatorPreview);
+  document.getElementById("mhfa-back")?.addEventListener("click", () => {
+    if (confirmDiscardEditorChanges()) {
+      renderOverview();
+    }
+  });
+  renderShelfFields(dimensions?.shelvesPerCompartment || [], dimensions?.compartmentCount || 0);
+  for (const input of form?.querySelectorAll("input[type='number']") || []) {
+    input.addEventListener("focus", () => input.select());
+  }
+  form?.addEventListener("input", (event) => {
+    if (event.target?.name === "compartmentCount") {
+      renderShelfFields(readShelfCounts(form), getCompartmentCount(form));
+      for (const input of form.querySelectorAll("input[type='number']")) {
+        input.addEventListener("focus", () => input.select());
+      }
+    }
+    updateCalculatorPreview();
+  });
   form?.addEventListener("submit", saveRoofPosition);
   updateCalculatorPreview();
+  mhfaState.editorSnapshot = getEditorSnapshot(form);
+  updateEditorDirtyState();
 }
 
 function updateCalculatorPreview() {
@@ -291,15 +345,43 @@ function updateCalculatorPreview() {
   const dimensions = readDimensions(form);
   const calculation = calculateRoofSlope(dimensions);
   const shape = document.getElementById("mhfa-shape");
+  const parts = getScaledShapeParts(dimensions);
+  const bom = calculateBillOfMaterials(dimensions);
 
   document.getElementById("mhfa-area").textContent = `${formatNumber(calculation.areaSqm)} m²`;
+  document.getElementById("mhfa-buildout-price").textContent = formatMoney(calculation.buildoutPrice);
   document.getElementById("mhfa-price").textContent = formatMoney(calculation.price);
+  document.getElementById("mhfa-bom").innerHTML = renderBillOfMaterials(bom);
 
   if (shape) {
-    const leftTopY = mapHeightToSvgY(dimensions.outerHeightCm, calculation.maxHeightCm);
-    const rightTopY = mapHeightToSvgY(dimensions.innerHeightCm, calculation.maxHeightCm);
-    shape.setAttribute("points", `24,126 236,126 236,${rightTopY} 24,${leftTopY}`);
+    shape.setAttribute("points", parts.outlinePoints);
+    document.getElementById("mhfa-partitions").innerHTML = parts.partitionLines.join("");
+    document.getElementById("mhfa-shelves").innerHTML = parts.shelfLines.join("");
   }
+  updateEditorDirtyState();
+}
+
+function getEditorSnapshot(form) {
+  if (!form) return "";
+  return JSON.stringify(readDimensions(form));
+}
+
+function isEditorDirty() {
+  const form = document.getElementById("mhfa-calculator");
+  return mhfaState.mode === "editor" && Boolean(form) && getEditorSnapshot(form) !== mhfaState.editorSnapshot;
+}
+
+function updateEditorDirtyState() {
+  const saveButton = document.getElementById("mhfa-save");
+  if (!saveButton) return;
+  saveButton.disabled = !isEditorDirty();
+}
+
+function confirmDiscardEditorChanges() {
+  if (!isEditorDirty()) {
+    return true;
+  }
+  return window.confirm("Es gibt ungespeicherte Änderungen. Wirklich schließen?");
 }
 
 function saveRoofPosition(event) {
@@ -350,10 +432,10 @@ function saveRoofPosition(event) {
 }
 
 function setSaving(isSaving) {
-  const button = document.querySelector("#mhfa-calculator button[type='submit']");
+  const button = document.getElementById("mhfa-save");
   if (!button) return;
   button.disabled = isSaving;
-  button.textContent = isSaving ? "Speichert..." : "Speichern";
+  button.classList.toggle("is-saving", isSaving);
 }
 
 function renderSaveError(message) {
@@ -372,31 +454,260 @@ function renderSaveError(message) {
 
 function readDimensions(form) {
   const data = new FormData(form);
+  const compartmentCount = getCompartmentCount(form);
   return {
     widthCm: Math.max(0, Number(data.get("widthCm")) || 0),
     outerHeightCm: Math.max(0, Number(data.get("outerHeightCm")) || 0),
-    innerHeightCm: Math.max(0, Number(data.get("innerHeightCm")) || 0)
+    innerHeightCm: Math.max(0, Number(data.get("innerHeightCm")) || 0),
+    outerSide: data.get("outerSide") === "rechts" ? "rechts" : "links",
+    compartmentCount,
+    shelvesPerCompartment: readShelfCounts(form).slice(0, compartmentCount)
   };
 }
 
-function calculateRoofSlope({ widthCm, outerHeightCm, innerHeightCm }) {
+function getCompartmentCount(form) {
+  const value = Number(new FormData(form).get("compartmentCount"));
+  return Math.max(1, Math.floor(value || 1));
+}
+
+function readShelfCounts(form) {
+  const fields = Array.from(form.querySelectorAll("[data-shelf-field]"));
+  return fields.map((field) => {
+    const selected = field.querySelector("input[type='radio']:checked");
+    return Math.max(0, Math.floor(Number(selected?.value) || 0));
+  });
+}
+
+function renderShelfFields(existingCounts, compartmentCount) {
+  const container = document.getElementById("mhfa-shelf-fields");
+  if (!container) return;
+
+  const count = Math.max(1, Math.floor(Number(compartmentCount) || 1));
+  const values = Array.from({ length: count }, (_, index) => existingCounts[index] ?? 0);
+  container.innerHTML = `
+    <table class="mhfa-shelf-table" aria-label="Regalböden je Fach">
+      <thead>
+        <tr>
+          <th scope="col"></th>
+          ${[0, 1, 2, 3, 4, 5].map((option) => `<th scope="col">${option}</th>`).join("")}
+        </tr>
+      </thead>
+      <tbody>
+        ${values.map((value, index) => `
+          <tr data-shelf-field>
+            <th scope="row">#${index + 1}</th>
+            ${[0, 1, 2, 3, 4, 5].map((option) => `
+              <td>
+                <label class="mhfa-shelf-dot">
+                  <input type="radio" name="shelfCount${index + 1}" value="${option}" ${Number(value) === option ? "checked" : ""}>
+                  <span aria-label="${option} Regalböden"></span>
+                </label>
+              </td>
+            `).join("")}
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function calculateRoofSlope(dimensions) {
+  const { widthCm, outerHeightCm, innerHeightCm } = dimensions;
   const areaSqm = (widthCm / 100) * (((outerHeightCm + innerHeightCm) / 2) / 100);
+  const bom = calculateBillOfMaterials(dimensions);
+  const buildoutPrice = sumGroups(bom.partitions) + sumGroups(bom.shelves);
   return {
     areaSqm,
-    price: areaSqm * MHFA_PRICE_PER_SQM,
-    maxHeightCm: Math.max(outerHeightCm, innerHeightCm, 1)
+    basePrice: areaSqm * MHFA_PRICE_PER_SQM,
+    buildoutPrice,
+    price: areaSqm * MHFA_PRICE_PER_SQM + buildoutPrice
   };
 }
 
-function mapHeightToSvgY(heightCm, maxHeightCm) {
-  const usableHeight = 102;
-  return 126 - (heightCm / maxHeightCm) * usableHeight;
+function getScaledShapeParts(dimensions) {
+  const { widthCm, outerHeightCm, innerHeightCm } = dimensions;
+  const drawing = {
+    x: 24,
+    y: 12,
+    width: 212,
+    height: 114
+  };
+  const safeWidth = Math.max(widthCm, 1);
+  const safeHeight = Math.max(outerHeightCm, innerHeightCm, 1);
+  const scale = Math.min(drawing.width / safeWidth, drawing.height / safeHeight);
+  const scaledWidth = safeWidth * scale;
+  const leftX = drawing.x + (drawing.width - scaledWidth) / 2;
+  const rightX = leftX + scaledWidth;
+  const bottomY = drawing.y + drawing.height;
+  const leftTopY = bottomY - getHeightAtX(dimensions, 0) * scale;
+  const rightTopY = bottomY - getHeightAtX(dimensions, widthCm) * scale;
+  const bom = calculateBillOfMaterials(dimensions);
+
+  const outlinePoints = [
+    [leftX, bottomY],
+    [rightX, bottomY],
+    [rightX, rightTopY],
+    [leftX, leftTopY]
+  ].map(([x, y]) => `${roundSvg(x)},${roundSvg(y)}`).join(" ");
+
+  const partitionLines = bom.partitionItems.map((item) => {
+    const x = leftX + item.xCm * scale;
+    const topY = bottomY - item.lengthCm * scale;
+    return `<line class="mhfa-partition-line" x1="${roundSvg(x)}" y1="${roundSvg(bottomY)}" x2="${roundSvg(x)}" y2="${roundSvg(topY)}"></line>`;
+  });
+
+  const shelfLines = bom.shelfItems.map((item) => {
+    const x1 = leftX + item.startCm * scale;
+    const x2 = leftX + item.endCm * scale;
+    const y = bottomY - item.heightCm * scale;
+    return `<line class="mhfa-shelf-line" x1="${roundSvg(x1)}" y1="${roundSvg(y)}" x2="${roundSvg(x2)}" y2="${roundSvg(y)}"></line>`;
+  });
+
+  return { outlinePoints, partitionLines, shelfLines };
 }
 
-function buildRoofDescription({ widthCm, outerHeightCm, innerHeightCm }) {
+function roundSvg(value) {
+  return Math.round(value * 100) / 100;
+}
+
+function calculateBillOfMaterials(dimensions) {
+  const partitionItems = getPartitionItems(dimensions);
+  const shelfItems = getShelfItems(dimensions);
+  return {
+    partitionItems,
+    shelfItems,
+    partitions: groupLengths(partitionItems, 25),
+    shelves: groupLengths(shelfItems, 20)
+  };
+}
+
+function getPartitionItems(dimensions) {
+  const { widthCm, compartmentCount } = dimensions;
+  if (!widthCm || compartmentCount <= 1) return [];
+
+  const compartmentWidth = widthCm / compartmentCount;
+  return Array.from({ length: compartmentCount - 1 }, (_, index) => {
+    const xCm = compartmentWidth * (index + 1);
+    return {
+      type: "partition",
+      xCm,
+      lengthCm: getHeightAtX(dimensions, xCm)
+    };
+  });
+}
+
+function getShelfItems(dimensions) {
+  const { widthCm, compartmentCount, shelvesPerCompartment } = dimensions;
+  if (!widthCm || compartmentCount < 1) return [];
+
+  const compartmentWidth = widthCm / compartmentCount;
+  const items = [];
+  for (let index = 0; index < compartmentCount; index += 1) {
+    const count = shelvesPerCompartment[index] || 0;
+    const startCm = compartmentWidth * index;
+    const endCm = startCm + compartmentWidth;
+    const centerCm = startCm + compartmentWidth / 2;
+    const compartmentHeight = getHeightAtX(dimensions, centerCm);
+
+    for (let shelfIndex = 1; shelfIndex <= count; shelfIndex += 1) {
+      const heightCm = compartmentHeight * (shelfIndex / (count + 1));
+      const shelfSpan = getHorizontalSpanUnderSlope(dimensions, startCm, endCm, heightCm);
+      items.push({
+        type: "shelf",
+        compartmentIndex: index,
+        heightCm,
+        startCm: shelfSpan.startCm,
+        endCm: shelfSpan.endCm,
+        lengthCm: Math.max(0, shelfSpan.endCm - shelfSpan.startCm)
+      });
+    }
+  }
+  return items;
+}
+
+function getHeightAtX({ widthCm, outerHeightCm, innerHeightCm, outerSide }, xCm) {
+  const leftHeight = outerSide === "links" ? outerHeightCm : innerHeightCm;
+  const rightHeight = outerSide === "links" ? innerHeightCm : outerHeightCm;
+  if (!widthCm) return 0;
+  return leftHeight + (rightHeight - leftHeight) * (xCm / widthCm);
+}
+
+function getHorizontalSpanUnderSlope(dimensions, startCm, endCm, shelfHeightCm) {
+  const startHeight = getHeightAtX(dimensions, startCm);
+  const endHeight = getHeightAtX(dimensions, endCm);
+  if (startHeight >= shelfHeightCm && endHeight >= shelfHeightCm) {
+    return { startCm, endCm };
+  }
+
+  const crossingCm = getXForHeight(dimensions, shelfHeightCm);
+  if (startHeight < shelfHeightCm) {
+    return { startCm: Math.min(Math.max(crossingCm, startCm), endCm), endCm };
+  }
+  return { startCm, endCm: Math.max(Math.min(crossingCm, endCm), startCm) };
+}
+
+function getXForHeight({ widthCm, outerHeightCm, innerHeightCm, outerSide }, heightCm) {
+  const leftHeight = outerSide === "links" ? outerHeightCm : innerHeightCm;
+  const rightHeight = outerSide === "links" ? innerHeightCm : outerHeightCm;
+  const delta = rightHeight - leftHeight;
+  if (!delta) return widthCm;
+  return ((heightCm - leftHeight) / delta) * widthCm;
+}
+
+function groupLengths(items, ratePerMeter) {
+  const groups = new Map();
+  for (const item of items) {
+    const lengthCm = Math.round(item.lengthCm);
+    if (lengthCm <= 0) continue;
+    const existing = groups.get(lengthCm) || { quantity: 0, lengthCm, price: 0 };
+    existing.quantity += 1;
+    existing.price = (existing.quantity * lengthCm / 100) * ratePerMeter;
+    groups.set(lengthCm, existing);
+  }
+  return Array.from(groups.values()).sort((a, b) => b.lengthCm - a.lengthCm);
+}
+
+function sumGroups(groups) {
+  return groups.reduce((sum, group) => sum + group.price, 0);
+}
+
+function renderBillOfMaterials(bom) {
+  return `
+    <section>
+      <h3>Trennwände</h3>
+      ${renderBomRows(bom.partitions)}
+    </section>
+    <section>
+      <h3>Regalböden</h3>
+      ${renderBomRows(bom.shelves)}
+    </section>
+  `;
+}
+
+function renderBomRows(groups) {
+  if (!groups.length) {
+    return `<p class="mhfa-muted">Keine</p>`;
+  }
+
+  return `
+    <dl>
+      ${groups.map((group) => `
+        <div>
+          <dt>${group.quantity} x ${group.lengthCm}cm</dt>
+          <dd>${formatMoney(group.price)}</dd>
+        </div>
+      `).join("")}
+    </dl>
+  `;
+}
+
+function buildRoofDescription({ widthCm, outerHeightCm, innerHeightCm, outerSide, compartmentCount, shelvesPerCompartment }) {
   return [
     "Dachschrägenregal",
-    `Abbmessungen: ${widthCm}cm Breite, ${outerHeightCm}cm Höhe außen, ${innerHeightCm}cm Höhe innen`
+    `Abbmessungen: ${widthCm}cm Breite, ${outerHeightCm}cm Höhe außen, ${innerHeightCm}cm Höhe innen`,
+    `Außenseite: ${outerSide}`,
+    `Fächer: ${compartmentCount}`,
+    `Regalböden je Fach: ${shelvesPerCompartment.join(", ")}`
   ].join("\n");
 }
 
@@ -407,8 +718,27 @@ function parseRoofDimensions(description = "") {
   return {
     widthCm: parseGermanNumber(match[1]),
     outerHeightCm: parseGermanNumber(match[2]),
-    innerHeightCm: parseGermanNumber(match[3])
+    innerHeightCm: parseGermanNumber(match[3]),
+    outerSide: parseOuterSide(description),
+    compartmentCount: parseCompartmentCount(description),
+    shelvesPerCompartment: parseShelvesPerCompartment(description)
   };
+}
+
+function parseOuterSide(description = "") {
+  const match = description.match(/Außenseite:\s*(links|rechts)/i);
+  return match?.[1]?.toLowerCase() === "rechts" ? "rechts" : "links";
+}
+
+function parseCompartmentCount(description = "") {
+  const match = description.match(/Fächer:\s*(\d+)/i);
+  return match ? Math.max(1, Number(match[1]) || 1) : 1;
+}
+
+function parseShelvesPerCompartment(description = "") {
+  const match = description.match(/Regalböden je Fach:\s*([0-9,\s]+)/i);
+  if (!match) return [];
+  return match[1].split(",").map((value) => Math.max(0, Math.floor(Number(value.trim()) || 0)));
 }
 
 function parseGermanNumber(value) {
