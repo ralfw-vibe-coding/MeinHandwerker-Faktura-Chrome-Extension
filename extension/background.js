@@ -1,13 +1,14 @@
 const API_BASE_URL = "https://verwaltung.mein-handwerker-app.de/public/MH_Api";
 const APP_HOME_URL = "https://verwaltung.mein-handwerker-app.de/";
 const BILLING_EDIT_PATTERN = /^https:\/\/verwaltung\.mein-handwerker-app\.de\/billing\/edit\/\d+\/?$/;
+const BILLING_CREATE_PATTERN = /^https:\/\/verwaltung\.mein-handwerker-app\.de\/billing\/create_billing\/\d+\/?$/;
 
 chrome.action.onClicked.addListener(async (tab) => {
   if (!tab.id || !tab.url) {
     return;
   }
 
-  if (!BILLING_EDIT_PATTERN.test(tab.url)) {
+  if (!BILLING_EDIT_PATTERN.test(tab.url) && !BILLING_CREATE_PATTERN.test(tab.url)) {
     await offerOpenMeinHandwerker(tab.id);
     return;
   }
@@ -36,6 +37,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message?.type === "updateInvoicePositions") {
     updateInvoicePositions(message.invoiceId, message.positions)
+      .then((data) => sendResponse({ ok: true, data }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message?.type === "createInvoice") {
+    createInvoice(message.constructionId, message.positions)
       .then((data) => sendResponse({ ok: true, data }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
@@ -96,6 +104,24 @@ async function updateInvoicePositions(invoiceId, positions) {
     client_id: config.clientId,
     client_password: config.clientPassword,
     invoice_id: Number(invoiceId),
+    positions
+  });
+}
+
+async function createInvoice(constructionId, positions) {
+  const config = await chrome.storage.local.get(["clientId", "clientPassword"]);
+  if (!config.clientId || !config.clientPassword) {
+    throw new Error("Bitte client_id und API-Key im Panel hinterlegen.");
+  }
+
+  if (!Array.isArray(positions) || positions.length === 0) {
+    throw new Error("Mindestens eine Rechnungsposition ist erforderlich.");
+  }
+
+  return postJson("/insert_invoice", {
+    client_id: config.clientId,
+    client_password: config.clientPassword,
+    construction_id: Number(constructionId),
     positions
   });
 }

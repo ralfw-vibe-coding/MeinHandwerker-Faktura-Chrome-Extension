@@ -1,6 +1,8 @@
 const MHFA_PRICE_PER_SQM = 500;
 let mhfaState = {
+  pageMode: "edit",
   invoiceId: null,
+  constructionId: null,
   invoice: null,
   customer: null,
   mode: "overview",
@@ -21,20 +23,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 })();
 
 function openAssistantPanel() {
-  const invoiceId = getInvoiceId(window.location.pathname);
-  if (!invoiceId) {
+  const context = getBillingContext(window.location.pathname);
+  if (!context) {
     return;
   }
 
-  mhfaState.invoiceId = invoiceId;
+  mhfaState.pageMode = context.mode;
+  mhfaState.invoiceId = context.invoiceId || null;
+  mhfaState.constructionId = context.constructionId || null;
 
   const existingPanel = document.getElementById("mhfa-panel");
   if (existingPanel) {
     existingPanel.hidden = false;
-    if (mhfaState.invoice) {
+    if (mhfaState.pageMode === "create") {
+      startCreateMode();
+    } else if (mhfaState.invoice) {
       renderOverview();
     } else {
-      loadInvoice(invoiceId);
+      loadInvoice(mhfaState.invoiceId);
     }
     return;
   }
@@ -45,7 +51,7 @@ function openAssistantPanel() {
     <header class="mhfa-header">
       <div>
         <strong>Faktura Assistent</strong>
-        <span>Rechnung ${escapeHtml(invoiceId)}</span>
+        <span>${escapeHtml(getPanelSubtitle())}</span>
       </div>
       <div class="mhfa-header-actions">
         <button type="button" id="mhfa-settings" class="mhfa-tool-button" title="Zugangsdaten" aria-label="Zugangsdaten">
@@ -79,19 +85,45 @@ function openAssistantPanel() {
 
   document.body.appendChild(panel);
   document.getElementById("mhfa-settings")?.addEventListener("click", () => renderSettings());
-  document.getElementById("mhfa-refresh")?.addEventListener("click", () => loadInvoice(invoiceId));
+  document.getElementById("mhfa-refresh")?.addEventListener("click", () => {
+    if (mhfaState.pageMode === "create") {
+      startCreateMode();
+    } else {
+      loadInvoice(mhfaState.invoiceId);
+    }
+  });
   document.getElementById("mhfa-close")?.addEventListener("click", () => {
     if (!confirmDiscardEditorChanges()) {
       return;
     }
     panel.hidden = true;
   });
-  loadInvoice(invoiceId);
+  if (mhfaState.pageMode === "create") {
+    startCreateMode();
+  } else {
+    loadInvoice(mhfaState.invoiceId);
+  }
 }
 
-function getInvoiceId(pathname) {
-  const match = pathname.match(/^\/billing\/edit\/(\d+)\/?$/);
-  return match ? match[1] : null;
+function getBillingContext(pathname) {
+  const editMatch = pathname.match(/^\/billing\/edit\/(\d+)\/?$/);
+  if (editMatch) {
+    return { mode: "edit", invoiceId: editMatch[1] };
+  }
+
+  const createMatch = pathname.match(/^\/billing\/create_billing\/(\d+)\/?$/);
+  if (createMatch) {
+    return { mode: "create", constructionId: createMatch[1] };
+  }
+
+  return null;
+}
+
+function getPanelSubtitle() {
+  if (mhfaState.pageMode === "create") {
+    return `Neue Rechnung für Projekt ${mhfaState.constructionId}`;
+  }
+  return `Rechnung ${mhfaState.invoiceId}`;
 }
 
 function loadInvoice(invoiceId) {
@@ -126,6 +158,22 @@ function loadInvoice(invoiceId) {
       };
       renderOverview();
     });
+  });
+}
+
+function startCreateMode() {
+  const content = document.getElementById("mhfa-content");
+  if (!content) return;
+
+  chrome.storage.local.get(["clientId", "clientPassword"], (config) => {
+    if (!config.clientId || !config.clientPassword) {
+      renderSettings("Bitte client_id und API-Key eintragen.");
+      return;
+    }
+
+    mhfaState.invoice = null;
+    mhfaState.customer = null;
+    renderEditor();
   });
 }
 
@@ -219,7 +267,11 @@ function renderSettings(message = "") {
         clientId: String(data.get("clientId") || "").trim(),
         clientPassword: String(data.get("clientPassword") || "").trim()
       }, () => {
-        loadInvoice(mhfaState.invoiceId);
+        if (mhfaState.pageMode === "create") {
+          startCreateMode();
+        } else {
+          loadInvoice(mhfaState.invoiceId);
+        }
       });
     });
   });
@@ -241,10 +293,11 @@ function renderRoofPositionButton(position) {
 
 function renderEditor(positionId = null) {
   const content = document.getElementById("mhfa-content");
-  if (!content || !mhfaState.invoice) return;
+  if (!content || (mhfaState.pageMode !== "create" && !mhfaState.invoice)) return;
 
   const position = positionId ? findPosition(positionId) : null;
   const dimensions = position ? parseRoofDimensions(position.description) : null;
+  const isCreateMode = mhfaState.pageMode === "create";
 
   mhfaState.mode = "editor";
   mhfaState.editPositionId = positionId;
@@ -252,7 +305,7 @@ function renderEditor(positionId = null) {
   content.innerHTML = `
     <section class="mhfa-section mhfa-section-first">
       <div class="mhfa-section-title">
-        <h2>${position ? "Dachschrägenregal bearbeiten" : "Dachschrägenregal hinzufügen"}</h2>
+        <h2>${position ? "Dachschrägenregal bearbeiten" : isCreateMode ? "Erste Position kalkulieren" : "Dachschrägenregal hinzufügen"}</h2>
         <div class="mhfa-editor-actions">
           <button type="submit" form="mhfa-calculator" id="mhfa-save" class="mhfa-tool-button mhfa-save-button" title="Speichern" aria-label="Speichern" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -291,7 +344,7 @@ function renderEditor(positionId = null) {
       </fieldset>
 
       <div class="mhfa-form-divider"></div>
-      <input name="compartmentCount" type="number" min="1" step="1" placeholder="Fächer" value="${escapeHtml(dimensions?.compartmentCount ?? "")}" required>
+      <input name="compartmentCount" type="number" min="1" step="1" placeholder="Fächer" value="${escapeHtml(dimensions?.compartmentCount ?? "")}">
       <div class="mhfa-shelf-config">
         <div class="mhfa-small-label">Regalböden je Fach:</div>
         <div id="mhfa-shelf-fields" class="mhfa-shelf-fields"></div>
@@ -316,7 +369,11 @@ function renderEditor(positionId = null) {
   const form = document.getElementById("mhfa-calculator");
   document.getElementById("mhfa-back")?.addEventListener("click", () => {
     if (confirmDiscardEditorChanges()) {
-      renderOverview();
+      if (mhfaState.pageMode === "create") {
+        document.getElementById("mhfa-panel").hidden = true;
+      } else {
+        renderOverview();
+      }
     }
   });
   renderShelfFields(dimensions?.shelvesPerCompartment || [], dimensions?.compartmentCount || 0);
@@ -390,7 +447,7 @@ function saveRoofPosition(event) {
   const form = event.currentTarget;
   const dimensions = readDimensions(form);
   const calculation = calculateRoofSlope(dimensions);
-  const positions = getPositions(mhfaState.invoice).map(toUpdatePosition);
+  const positions = mhfaState.pageMode === "create" ? [] : getPositions(mhfaState.invoice).map(toUpdatePosition);
   const updatedPosition = {
     description: buildRoofDescription(dimensions),
     quantity: 1,
@@ -410,11 +467,19 @@ function saveRoofPosition(event) {
   }
 
   setSaving(true);
-  chrome.runtime.sendMessage({
-    type: "updateInvoicePositions",
-    invoiceId: mhfaState.invoiceId,
-    positions
-  }, (response) => {
+  const message = mhfaState.pageMode === "create"
+    ? {
+        type: "createInvoice",
+        constructionId: mhfaState.constructionId,
+        positions
+      }
+    : {
+        type: "updateInvoicePositions",
+        invoiceId: mhfaState.invoiceId,
+        positions
+      };
+
+  chrome.runtime.sendMessage(message, (response) => {
     setSaving(false);
 
     if (chrome.runtime.lastError) {
@@ -424,6 +489,16 @@ function saveRoofPosition(event) {
 
     if (!response?.ok) {
       renderSaveError(response?.error || "Speichern fehlgeschlagen.");
+      return;
+    }
+
+    if (mhfaState.pageMode === "create") {
+      const invoiceId = response.data?.invoice_id;
+      if (!invoiceId) {
+        renderSaveError("Rechnung wurde angelegt, aber die API hat keine invoice_id zurückgegeben.");
+        return;
+      }
+      window.location.href = `https://verwaltung.mein-handwerker-app.de/billing/edit/${invoiceId}`;
       return;
     }
 

@@ -44,7 +44,7 @@ extension/
 Aktuelle Version:
 
 ```text
-0.5.0
+0.6.0
 ```
 
 ## Nutzung
@@ -53,12 +53,25 @@ Die Extension wird automatisch auf Rechnungsseiten geladen, deren URL so beginnt
 
 ```text
 https://verwaltung.mein-handwerker-app.de/billing/edit/
+https://verwaltung.mein-handwerker-app.de/billing/create_billing/
 ```
 
 Die Rechnungs-ID wird aus dem letzten URL-Segment gelesen, z.B. `43928` aus:
 
 ```text
 https://verwaltung.mein-handwerker-app.de/billing/edit/43928
+```
+
+Beim Erstellen einer noch nicht gespeicherten Rechnung steht in der URL statt einer Rechnungs-ID die Projekt-ID:
+
+```text
+https://verwaltung.mein-handwerker-app.de/billing/create_billing/1526229
+```
+
+In diesem Zustand gibt es noch keine `invoice_id` und keine gespeicherte Positionsliste. Die Extension startet deshalb direkt mit dem Kalkulator für die erste Dachschrägenregal-Position. Beim Speichern ruft sie `insert_invoice` auf, legt damit einen Rechnungsentwurf für die `construction_id` an und leitet anschließend auf die Bearbeitungsseite weiter:
+
+```text
+https://verwaltung.mein-handwerker-app.de/billing/edit/{invoice_id}
 ```
 
 Bedienung:
@@ -162,6 +175,7 @@ curl -X POST "https://verwaltung.mein-handwerker-app.de/public/MH_Api/check_pass
 Die Extension verwendet aktuell:
 
 ```text
+POST /insert_invoice
 POST /get_invoice
 GET  /get_customers
 POST /update_invoice
