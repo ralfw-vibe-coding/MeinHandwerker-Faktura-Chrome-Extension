@@ -1,0 +1,1817 @@
+    602 +    existing.quantity += 1;
+    603 +    existing.price = (existing.quantity * lengthCm / 100) * ratePerMeter;
+    604 +    groups.set(lengthCm, existing);
+    605 +  }
+    606 +  return Array.from(groups.values()).sort((a, b) => b.lengthCm - a.lengthCm);
+    607 +}
+    608 +
+    609 +function sumGroups(groups) {
+    610 +  return groups.reduce((sum, group) => sum + group.price, 0);
+    611 +}
+    612 +
+    613 +function renderBillOfMaterials(bom) {
+    614 +  return `
+    615 +    <section>
+    616 +      <h3>Trennwaende</h3>
+    617 +      ${renderBomRows(bom.partitions)}
+    618 +    </section>
+    619 +    <section>
+    620 +      <h3>Regalboeden</h3>
+    621 +      ${renderBomRows(bom.shelves)}
+    622 +    </section>
+    623 +  `;
+    624 +}
+    625 +
+    626 +function renderBomRows(groups) {
+    627 +  if (!groups.length) {
+    628 +    return `<p class="mhfa-muted">Keine</p>`;
+    629 +  }
+    630 +
+    631 +  return `
+    632 +    <dl>
+    633 +      ${groups.map((group) => `
+    634 +        <div>
+    635 +          <dt>${group.quantity} x ${group.lengthCm}cm</dt>
+    636 +          <dd>${formatMoney(group.price)}</dd>
+    637 +        </div>
+    638 +      `).join("")}
+    639 +    </dl>
+    640 +  `;
+    641 +}
+    642 +
+    643 +function buildRoofDescription({ widthCm, outerHeightCm, innerHeightCm, outerSide, compartmentCount, shelvesPerCompartment }) {
+    644    return [
+        ⋮
+    646      `Abbmessungen: ${widthCm}cm Breite, ${outerHeightCm}cm Höhe außen, ${innerHeightCm}cm Höhe innen`,
+    469 -    `Außenseite: ${outerSide}`
+    647 +    `Außenseite: ${outerSide}`,
+    648 +    `Fächer: ${compartmentCount}`,
+    649 +    `Regalböden je Fach: ${shelvesPerCompartment.join(", ")}`
+    650    ].join("\n");
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Die Berechnungsfunktionen sind drin. Ich ergänze jetzt Parser für die gespeicherten Fächer/Regalböden, damit Bearbeiten vorhandener Positionen funktioniert.
+
+• Edited extension/content.js (+14 -1)
+    660      innerHeightCm: parseGermanNumber(match[3]),
+    661 -    outerSide: parseOuterSide(description)
+    661 +    outerSide: parseOuterSide(description),
+    662 +    compartmentCount: parseCompartmentCount(description),
+    663 +    shelvesPerCompartment: parseShelvesPerCompartment(description)
+    664    };
+        ⋮
+    671
+    672 +function parseCompartmentCount(description = "") {
+    673 +  const match = description.match(/Fächer:\s*(\d+)/i);
+    674 +  return match ? Math.max(1, Number(match[1]) || 1) : 1;
+    675 +}
+    676 +
+    677 +function parseShelvesPerCompartment(description = "") {
+    678 +  const match = description.match(/Regalböden je Fach:\s*([0-9,\s]+)/i);
+    679 +  if (!match) return [];
+    680 +  return match[1].split(",").map((value) => Math.max(0, Math.floor(Number(value.trim()) || 0)));
+    681 +}
+    682 +
+    683  function parseGermanNumber(value) {
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Jetzt style ich die Stückliste, Fachboden-Eingaben und die neuen Zeichnungslinien.
+
+• Edited extension/content.css (+82 -0)
+    199
+    200 +.mhfa-small-label {
+    201 +  color: #344054;
+    202 +  font-size: 12px;
+    203 +  font-weight: 600;
+    204 +}
+    205 +
+    206 +.mhfa-shelf-config {
+    207 +  display: grid;
+    208 +  gap: 12px;
+    209 +}
+    210 +
+    211 +.mhfa-shelf-fields {
+    212 +  display: grid;
+    213 +  grid-template-columns: repeat(2, minmax(0, 1fr));
+    214 +  gap: 12px;
+    215 +}
+    216 +
+    217 +.mhfa-shelf-fields label {
+    218 +  display: grid;
+    219 +  grid-template-columns: 1fr 60px;
+    220 +  align-items: center;
+    221 +  gap: 12px;
+    222 +  font-size: 12px;
+    223 +}
+    224 +
+    225  .mhfa-chip-field {
+        ⋮
+    316
+    317 +.mhfa-partition-line,
+    318 +.mhfa-shelf-line {
+    319 +  stroke: #175cd3;
+    320 +  stroke-linecap: square;
+    321 +  vector-effect: non-scaling-stroke;
+    322 +}
+    323 +
+    324 +.mhfa-partition-line {
+    325 +  stroke-width: 3;
+    326 +}
+    327 +
+    328 +.mhfa-shelf-line {
+    329 +  stroke-width: 2;
+    330 +}
+    331 +
+    332 +.mhfa-bom {
+    333 +  display: grid;
+    334 +  gap: 12px;
+    335 +}
+    336 +
+    337 +.mhfa-bom section {
+    338 +  display: grid;
+    339 +  gap: 6px;
+    340 +}
+    341 +
+    342 +.mhfa-bom h3 {
+    343 +  margin: 0;
+    344 +  color: #17202a;
+    345 +  font-size: 12px;
+    346 +}
+    347 +
+    348 +.mhfa-bom dl {
+    349 +  display: grid;
+    350 +  gap: 6px;
+    351 +  margin: 0;
+    352 +}
+    353 +
+    354 +.mhfa-bom dl div {
+    355 +  display: flex;
+    356 +  justify-content: space-between;
+    357 +  gap: 12px;
+    358 +}
+    359 +
+    360 +.mhfa-bom dt,
+    361 +.mhfa-bom dd {
+    362 +  margin: 0;
+    363 +}
+    364 +
+    365 +.mhfa-bom dt {
+    366 +  color: #344054;
+    367 +}
+    368 +
+    369 +.mhfa-bom dd {
+    370 +  font-variant-numeric: tabular-nums;
+    371 +  font-weight: 600;
+    372 +}
+    373 +
+    374  .mhfa-actions {
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich erhöhe die Version auf 0.4.0 für die neue Fach-/Stücklistenfunktion und ergänze die README mit den neuen Preisregeln.
+
+• Edited extension/manifest.json (+1 -1)
+    3    "name": "MeinHandwerker Faktura Assistent",
+    4 -  "version": "0.3.1",
+    4 +  "version": "0.4.0",
+    5    "description": "Spiegelt Rechnungsdaten aus MeinHandwerker auf der Rechnungsseite.",
+
+• Edited readme.md (+7 -1)
+     54  ```text
+     55 -0.3.1
+     55 +0.4.0
+     56  ```
+        ⋮
+    102  Außenseite: links oder rechts
+    103 +Faecher
+    104 +Regalboeden je Fach
+    105  ```
+        ⋮
+    114  Preis netto = Flaeche in m² * 500 EUR
+    115 +Trennwaende = 25 EUR pro laufendem Meter
+    116 +Regalboeden = 20 EUR pro laufendem Meter
+    117  ```
+        ⋮
+    124  Außenseite: links
+    125 +Fächer: 4
+    126 +Regalböden je Fach: 1, 2, 0, 1
+    127  ```
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich prüfe jetzt Syntax und die neue Berechnungslogik mit einem kleinen isolierten Node-Check auf die relevanten Formeln.
+
+• Ran node --check extension/content.js
+  └ (no output)
+
+• Ran node -e 'const m=JSON.parse(require("fs").readFileSync("extension/manifest.json","utf8")); console.log(m.name, m.version)'
+  └ MeinHandwerker Faktura Assistent 0.4.0
+
+• Ran node - <<'NODE'
+  │ function getHeightAtX(d,x){const left=d.outerSide==='links'?d.outerHeightCm:d.innerHeightCm; const right=d.outerSide==='links'?d.innerHeightCm:d.outerHeightCm; return left+(right-left)*(x/
+  │ d.widthCm)}
+  │ … +6 lines
+• Ran git status --short
+  └  M extension/content.css
+     M extension/content.js
+     M extension/manifest.json
+     M readme.md
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Erledigt. Version ist jetzt 0.4.0.
+
+  Neu im Konfigurator:
+
+  - Faecher als Anzahl vertikaler Abteilungen
+  - Eingaben für Regalboeden je Fach
+  - Trennwände werden gleichmäßig über die Breite verteilt
+  - Regalboden-Höhen werden pro Fach über die Fachhöhe an der Fachmitte verteilt
+  - Stückliste mit gruppierten gleichen Längen und Preisen
+  - Zeichnung zeigt Trennwände und Regalboden-Linien
+  - Positionsbeschreibung speichert jetzt auch Fächer und Regalboden-Anzahlen
+
+  Preislogik:
+
+  Grundpreis = Fläche * 500 EUR/m²
+  Trennwände = 25 EUR pro laufendem Meter
+  Regalböden = 20 EUR pro laufendem Meter
+
+  Gespeicherte Beschreibung enthält jetzt z.B.:
+
+  Dachschrägenregal
+  Abbmessungen: 200cm Breite, 0cm Höhe außen, 150cm Höhe innen
+  Außenseite: links
+  Fächer: 4
+  Regalböden je Fach: 1, 2, 0, 1
+
+  Geprüft:
+
+  node --check extension/content.js
+  MeinHandwerker Faktura Assistent 0.4.0
+
+  Chrome-Extension bitte neu laden.
+
+
+› die angaben für breite, höhe außen/innen sollen nebeeinander in einer zeile stehen. es braucht keine label, sondern nur placeholder.
+  "außenseite" als label brauche ich auch nicht. unter den abmessungen einfach nur die chips.
+  darunter fächer mit einer kleinen trennlinie. aber das feld für fachanzahl brauch auch kein label, nur platzhalter.
+
+  die anzahl der regalböden pro fach sollten auch kompakter erfagt werden. je fach eine zeile, in der ich mit radio buttons 0,1,2,4,5 anklicken kann. mehr als 5 regalböden gibt es nicht pro
+  fach.
+
+
+• Ich verdichte das Formular: Maße in eine Zeile mit Platzhaltern, Außenseite nur als Chips, Fächer nach einer kleinen Trennlinie und Regalboden-Auswahl je Fach als kompakte Radio-Zeile mit den
+  erlaubten Werten.
+
+• Edited extension/content.js (+23 -24)
+    257      <form id="mhfa-calculator" class="mhfa-form">
+    258 -      <label>
+    259 -        Breite in cm
+    260 -        <input name="widthCm" type="number" min="1" step="1" value="${escapeHtml(dimensions?.widthCm ?? "")}" required>
+    261 -      </label>
+    262 -      <label>
+    263 -        Hoehe außen in cm
+    264 -        <input name="outerHeightCm" type="number" min="0" step="1" value="${escapeHtml(dimensions?.outerHeightCm ?? "")}" required>
+    265 -      </label>
+    266 -      <label>
+    267 -        Hoehe innen in cm
+    268 -        <input name="innerHeightCm" type="number" min="0" step="1" value="${escapeHtml(dimensions?.innerHeightCm ?? "")}" required>
+    269 -      </label>
+    258 +      <div class="mhfa-measure-row">
+    259 +        <input name="widthCm" type="number" min="1" step="1" placeholder="Breite cm" value="${escapeHtml(dimensions?.widthCm ?? "")}" required>
+    260 +        <input name="outerHeightCm" type="number" min="0" step="1" placeholder="H außen cm" value="${escapeHtml(dimensions?.outerHeightCm ?? "")}" required>
+    261 +        <input name="innerHeightCm" type="number" min="0" step="1" placeholder="H innen cm" value="${escapeHtml(dimensions?.innerHeightCm ?? "")}" required>
+    262 +      </div>
+    263        <fieldset class="mhfa-chip-field mhfa-side-field">
+    271 -        <legend>Außenseite</legend>
+    264          <div class="mhfa-chip-row">
+        ⋮
+    274        </fieldset>
+    283 -      <label>
+    284 -        Faecher
+    285 -        <input name="compartmentCount" type="number" min="1" step="1" value="${escapeHtml(dimensions?.compartmentCount ?? "")}" required>
+    286 -      </label>
+    275 +
+    276 +      <div class="mhfa-form-divider"></div>
+    277 +      <input name="compartmentCount" type="number" min="1" step="1" placeholder="Faecher" value="${escapeHtml(dimensions?.compartmentCount ?? "")}" required>
+    278        <div class="mhfa-shelf-config">
+    288 -        <div class="mhfa-small-label">Regalboeden je Fach</div>
+    279          <div id="mhfa-shelf-fields" class="mhfa-shelf-fields"></div>
+        ⋮
+    423  function readShelfCounts(form) {
+    434 -  return Array.from(form.querySelectorAll("[data-shelf-count]")).map((input) => {
+    435 -    return Math.max(0, Math.floor(Number(input.value) || 0));
+    424 +  const fields = Array.from(form.querySelectorAll("[data-shelf-field]"));
+    425 +  return fields.map((field) => {
+    426 +    const selected = field.querySelector("input[type='radio']:checked");
+    427 +    return Math.max(0, Math.floor(Number(selected?.value) || 0));
+    428    });
+        ⋮
+    437    container.innerHTML = values.map((value, index) => `
+    446 -    <label>
+    447 -      <span>Fach ${index + 1}</span>
+    448 -      <input data-shelf-count name="shelfCount${index + 1}" type="number" min="0" step="1" value="${escapeHtml(value)}">
+    449 -    </label>
+    438 +    <fieldset class="mhfa-shelf-field" data-shelf-field>
+    439 +      <legend>Fach ${index + 1}</legend>
+    440 +      <div class="mhfa-shelf-options">
+    441 +        ${[0, 1, 2, 4, 5].map((option) => `
+    442 +          <label>
+    443 +            <input type="radio" name="shelfCount${index + 1}" value="${option}" ${Number(value) === option ? "checked" : ""}>
+    444 +            <span>${option}</span>
+    445 +          </label>
+    446 +        `).join("")}
+    447 +      </div>
+    448 +    </fieldset>
+    449    `).join("");
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Die Markup-Struktur ist umgestellt. Ich passe jetzt das CSS an, damit die Maße sauber in einer Zeile stehen und die Regalboden-Auswahl pro Fach kompakt bleibt.
+
+• Edited extension/content.css (+62 -9)
+    199
+    200 -.mhfa-small-label {
+    201 -  color: #344054;
+    202 -  font-size: 12px;
+    203 -  font-weight: 600;
+    200 +.mhfa-measure-row {
+    201 +  display: grid;
+    202 +  grid-template-columns: repeat(3, minmax(0, 1fr));
+    203 +  gap: 12px;
+    204 +}
+    205 +
+    206 +.mhfa-measure-row input {
+    207 +  width: 100%;
+    208 +  min-width: 0;
+    209 +}
+    210 +
+    211 +.mhfa-form-divider {
+    212 +  height: 1px;
+    213 +  background: #e5e7eb;
+    214  }
+        ⋮
+    222    display: grid;
+    213 -  grid-template-columns: repeat(2, minmax(0, 1fr));
+    223    gap: 12px;
+        ⋮
+    225
+    217 -.mhfa-shelf-fields label {
+    226 +.mhfa-shelf-field {
+    227    display: grid;
+    219 -  grid-template-columns: 1fr 60px;
+    228 +  grid-template-columns: 48px 1fr;
+    229    align-items: center;
+    230    gap: 12px;
+    231 +  margin: 0;
+    232 +  padding: 0;
+    233 +  border: 0;
+    234 +}
+    235 +
+    236 +.mhfa-shelf-field legend {
+    237 +  padding: 0;
+    238 +  color: #344054;
+    239    font-size: 12px;
+    240 +  font-weight: 600;
+    241  }
+    242
+    243 +.mhfa-shelf-options {
+    244 +  display: grid;
+    245 +  grid-template-columns: repeat(5, minmax(0, 1fr));
+    246 +  gap: 6px;
+    247 +}
+    255 +  opacity: 0;
+    256 +  pointer-events: none;
+    257 +}
+    258 +
+    261 +  align-items: center;
+    262 +  justify-content: center;
+    263 +  min-height: 24px;
+    264 +  border: 1px solid #b6c2cf;
+    265 +  border-radius: 6px;
+    266 +  background: #ffffff;
+    267 +  color: #17202a;
+    268 +  cursor: pointer;
+    269 +  font-size: 12px;
+    270 +}
+    271 +
+    272 +.mhfa-shelf-options input:checked + span {
+    273 +  border-color: #175cd3;
+    274 +  color: #ffffff;
+    275 +  background: #175cd3;
+    276 +}
+    277 +
+    278  .mhfa-chip-field {
+        ⋮
+    292  .mhfa-side-field {
+    240 -  grid-template-columns: 1fr auto;
+    241 -  align-items: center;
+    293 +  justify-content: start;
+    294  }
+    298    font-size: 12px;
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Die kompakte Darstellung ist gestylt. Ich erhöhe die Patch-Version und dokumentiere die neue Eingabeform kurz.
+
+• Edited extension/manifest.json (+1 -1)
+    3    "name": "MeinHandwerker Faktura Assistent",
+    4 -  "version": "0.4.0",
+    4 +  "version": "0.4.1",
+    5    "description": "Spiegelt Rechnungsdaten aus MeinHandwerker auf der Rechnungsseite.",
+
+• Edited readme.md (+9 -1)
+     54  ```text
+     55 -0.4.0
+     55 +0.4.1
+     56  ```
+        ⋮
+    106
+    108 +
+    109 +```text
+    110 +Breite, Hoehe außen und Hoehe innen stehen kompakt in einer Zeile mit Platzhaltern.
+    111 +Außenseite wird nur ueber zwei Chips gewaehlt.
+    112 +Regalboeden je Fach werden pro Fach ueber Radio-Auswahl 0, 1, 2, 4 oder 5 gesetzt.
+    113 +```
+    114 +
+    115  Die Korpuszeichnung im Kalkulator wird maßstabsgerecht mit einem gemeinsamen Skalierungsfaktor
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich prüfe jetzt Syntax und Manifest-Version.
+
+• Ran node --check extension/content.js
+  └ (no output)
+
+• Explored
+  └ Search mhfa-measure-row|mhfa-shelf-options|0.4.1|Regalboeden je Fach in content.js
+
+• Ran node -e 'const m=JSON.parse(require("fs").readFileSync("extension/manifest.json","utf8")); console.log(m.name, m.version)'
+  └ MeinHandwerker Faktura Assistent 0.4.1
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Erledigt. Version ist jetzt 0.4.1.
+
+  Geändert:
+
+  - Breite, Höhe außen, Höhe innen stehen in einer Zeile.
+  - Keine Labels mehr für diese Felder, nur Placeholder.
+  - Außenseite-Label entfernt, darunter nur noch die Chips.
+  - Vor Faecher sitzt eine kleine Trennlinie.
+  - Fachanzahl hat nur noch Placeholder.
+  - Regalboden-Anzahl je Fach ist jetzt kompakt als Radio-Zeile mit 0, 1, 2, 4, 5.
+
+  Geprüft:
+
+  node --check extension/content.js
+  MeinHandwerker Faktura Assistent 0.4.1
+
+
+› [Image #1] das geht gar nict für die regalanzahl je fach. ich will es so sehen:
+
+  Regalböden je Fach:
+     0 1 2 3 4 5
+  #1 X O O O O O
+  #2 O O X O O O
+  usw.
+
+  die O stehen für runde chips oder so, die ich anklicken kann, um eine anzahl auszuwählen.
+
+
+• Ich ersetze die bisherigen Radio-Chips durch eine kompakte Matrix: Kopfzeile 0 1 2 3 4 5, darunter pro Fach eine Zeile mit Fachnummer und runden auswählbaren Punkten.
+
+• Edited extension/content.js (+19 -10)
+    278        <div class="mhfa-shelf-config">
+    279 +        <div class="mhfa-small-label">Regalböden je Fach:</div>
+    280          <div id="mhfa-shelf-fields" class="mhfa-shelf-fields"></div>
+        ⋮
+    437    const values = Array.from({ length: count }, (_, index) => existingCounts[index] ?? 0);
+    437 -  container.innerHTML = values.map((value, index) => `
+    438 -    <fieldset class="mhfa-shelf-field" data-shelf-field>
+    439 -      <legend>Fach ${index + 1}</legend>
+    440 -      <div class="mhfa-shelf-options">
+    441 -        ${[0, 1, 2, 4, 5].map((option) => `
+    438 +  container.innerHTML = `
+    439 +    <div class="mhfa-shelf-grid" role="group" aria-label="Regalböden je Fach">
+    440 +      <div class="mhfa-shelf-grid-head" aria-hidden="true">
+    441 +        <span></span>
+    442 +        ${[0, 1, 2, 3, 4, 5].map((option) => `<span>${option}</span>`).join("")}
+    443 +      </div>
+    444 +      ${values.map((value, index) => `
+    445 +        <fieldset class="mhfa-shelf-field" data-shelf-field>
+    446 +          <legend>#${index + 1}</legend>
+    447 +          <div class="mhfa-shelf-options">
+    448 +            ${[0, 1, 2, 3, 4, 5].map((option) => `
+    449            <label>
+    450              <input type="radio" name="shelfCount${index + 1}" value="${option}" ${Number(value) === option ? "checked" : ""}>
+    444 -            <span>${option}</span>
+    451 +            <span aria-label="${option} Regalboeden"></span>
+    452            </label>
+    446 -        `).join("")}
+    447 -      </div>
+    448 -    </fieldset>
+    449 -  `).join("");
+    453 +            `).join("")}
+    454 +          </div>
+    455 +        </fieldset>
+    456 +      `).join("")}
+    457 +    </div>
+    458 +  `;
+    459  }
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Die Regalboden-Auswahl ist jetzt als Matrix im Markup. Ich ersetze das CSS für diesen Bereich durch runde Punkte mit klarer Auswahlmarkierung.
+
+• Edited extension/content.css (+42 -17)
+    215
+    216 +.mhfa-small-label {
+    217 +  color: #344054;
+    218 +  font-size: 12px;
+    219 +  font-weight: 600;
+    220 +}
+    221 +
+    222  .mhfa-shelf-config {
+        ⋮
+    226
+    221 -.mhfa-shelf-fields {
+    227 +.mhfa-shelf-grid {
+    228    display: grid;
+    223 -  gap: 12px;
+    229 +  gap: 6px;
+    230  }
+    231
+    232 +.mhfa-shelf-grid-head,
+    233  .mhfa-shelf-field {
+    234    display: grid;
+    228 -  grid-template-columns: 48px 1fr;
+    235 +  grid-template-columns: 36px repeat(6, 24px);
+    236    align-items: center;
+    230 -  gap: 12px;
+    237 +  gap: 6px;
+    238 +}
+    239 +
+    240 +.mhfa-shelf-grid-head span {
+    241 +  color: #52606d;
+    242 +  font-size: 12px;
+    243 +  line-height: 1;
+    244 +  text-align: center;
+    245 +}
+    246 +
+    247 +.mhfa-shelf-field {
+    248    margin: 0;
+        ⋮
+    260  .mhfa-shelf-options {
+    244 -  display: grid;
+    245 -  grid-template-columns: repeat(5, minmax(0, 1fr));
+    246 -  gap: 6px;
+    261 +  display: contents;
+    262  }
+        ⋮
+    264  .mhfa-shelf-options label {
+    250 -  display: block;
+    265 +  display: flex;
+    266 +  align-items: center;
+    267 +  justify-content: center;
+    268 +  width: 24px;
+    269 +  height: 24px;
+    270  }
+        ⋮
+    278  .mhfa-shelf-options span {
+    260 -  display: flex;
+    264 -  border: 1px solid #b6c2cf;
+    265 -  border-radius: 6px;
+    279 +  display: block;
+    280 +  width: 14px;
+    281 +  height: 14px;
+    282 +  border: 1px solid #98a2b3;
+    283 +  border-radius: 999px;
+    284    background: #ffffff;
+    267 -  color: #17202a;
+    285    cursor: pointer;
+    269 -  font-size: 12px;
+    286  }
+        ⋮
+    289    border-color: #175cd3;
+    274 -  color: #ffffff;
+    290    background: #175cd3;
+    291 +  box-shadow: inset 0 0 0 3px #ffffff;
+    292 +}
+    293 +
+    294 +/*
+    295 + * Kept for non-side chip groups.
+    296 + */
+    297 +.mhfa-chip-row {
+    298 +  display: grid;
+    299 +  grid-template-columns: 1fr 1fr;
+    300 +  gap: 6px;
+    301  }
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich prüfe kurz, ob sich durch den CSS-Umbau doppelte Regeln gegenseitig überschreiben.
+
+• Ran rg -n "mhfa-chip-row|mhfa-shelf" extension/content.css && node --check extension/content.js
+  └ 222:.mhfa-shelf-config {
+    227:.mhfa-shelf-grid {
+    … +13 lines (ctrl + t to view transcript)
+    396:.mhfa-shelf-line {
+    406:.mhfa-shelf-line {
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Es gibt tatsächlich noch eine doppelte .mhfa-chip-row-Regel. Ich bereinige das, damit die Chips konsistent bleiben.
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich entferne die überflüssige frühere Chip-Regel und lasse die 12px-Raster-Variante stehen.
+
+• Edited extension/content.css (+0 -9)
+    293
+    294 -/*
+    295 - * Kept for non-side chip groups.
+    296 - */
+    297 -.mhfa-chip-row {
+    298 -  display: grid;
+    299 -  grid-template-columns: 1fr 1fr;
+    300 -  gap: 6px;
+    301 -}
+    302 -
+    294  .mhfa-chip-field {
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich erhöhe die Patch-Version auf 0.4.2 für diese UI-Korrektur und prüfe danach nochmal.
+
+• Edited extension/manifest.json (+1 -1)
+    3    "name": "MeinHandwerker Faktura Assistent",
+    4 -  "version": "0.4.1",
+    4 +  "version": "0.4.2",
+        ⋮
+    111  Außenseite wird nur ueber zwei Chips gewaehlt.
+    112 -Regalboeden je Fach werden pro Fach ueber Radio-Auswahl 0, 1, 2, 4 oder 5 gesetzt.
+    112 +Regalboeden je Fach werden als Matrix mit Spalten 0, 1, 2, 3, 4, 5 und runden Auswahlpunkten gesetzt.
+    113  ```
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich mache den finalen Syntax- und Versionscheck.
+
+• Explored
+  └ Search mhfa-shelf-grid|mhfa-shelf-options|0.4.2 in content.js
+
+• Ran node --check extension/content.js
+  └ (no output)
+
+• Ran node -e 'const m=JSON.parse(require("fs").readFileSync("extension/manifest.json","utf8")); console.log(m.name, m.version)'
+  └ MeinHandwerker Faktura Assistent 0.4.2
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Erledigt. Die Regalboden-Auswahl ist jetzt als Matrix umgesetzt:
+
+  Regalböden je Fach:
+        0 1 2 3 4 5
+  #1    O O X O O O
+  #2    X O O O O O
+
+  Technisch:
+
+  - Spalten 0 1 2 3 4 5
+  - pro Fach eine kompakte Zeile #1, #2, ...
+  - runde auswählbare Punkte
+  - gewählter Punkt ist blau markiert
+  - Version erhöht auf 0.4.2
+
+  Geprüft:
+
+  node --check extension/content.js
+  MeinHandwerker Faktura Assistent 0.4.2
+
+
+› wenn ich in ein maß klicke oder die anzahl fächer, dann soll der inhalt komplett selektiert sein.
+
+  achte auf die umlaute in "Dachschraegenregal bearbeiten"! es soll "Dachschrägen" heißen. umlaute überall verwenden, wo nötig. der text soll auch fett geschrieben werden.
+
+  solange bei fächeranzahl nichts steht, wird 1 angenommen.
+
+  bei den regalböden musst du es schaffen, die fachnummer (zb #1, #2) in derselben zeile wie die radio buttons zu haben. für den bereich am besten eine html tabelle, damit alles sauber
+  ausgerichtet ist!
+
+
+• Ich ändere die Eingaben so, dass Zahlenfelder beim Fokus komplett selektieren, korrigiere die Umlaute in den UI-Texten und baue die Regalboden-Auswahl als echte Tabelle auf. Außerdem bleibt
+  eine leere Fachanzahl intern bei 1.
+
+• Edited extension/content.js (+28 -18)
+    246        <div class="mhfa-section-title">
+    247 -        <h2>${position ? "Dachschraegenregal bearbeiten" : "Dachschraegenregal hinzufuegen"}</h2>
+    247 +        <h2>${position ? "Dachschrägenregal bearbeiten" : "Dachschrägenregal hinzufügen"}</h2>
+    248          <button type="button" id="mhfa-back" class="mhfa-tool-button" title="Zurueck" aria-label="Zurueck">
+        ⋮
+    305    renderShelfFields(dimensions?.shelvesPerCompartment || [], dimensions?.compartmentCount || 0);
+    306 +  for (const input of form?.querySelectorAll("input[type='number']") || []) {
+    307 +    input.addEventListener("focus", () => input.select());
+    308 +  }
+    309    form?.addEventListener("input", (event) => {
+        ⋮
+    311        renderShelfFields(readShelfCounts(form), getCompartmentCount(form));
+    312 +      for (const input of form.querySelectorAll("input[type='number']")) {
+    313 +        input.addEventListener("focus", () => input.select());
+    314 +      }
+    315      }
+        ⋮
+    444    container.innerHTML = `
+    439 -    <div class="mhfa-shelf-grid" role="group" aria-label="Regalböden je Fach">
+    440 -      <div class="mhfa-shelf-grid-head" aria-hidden="true">
+    441 -        <span></span>
+    442 -        ${[0, 1, 2, 3, 4, 5].map((option) => `<span>${option}</span>`).join("")}
+    443 -      </div>
+    444 -      ${values.map((value, index) => `
+    445 -        <fieldset class="mhfa-shelf-field" data-shelf-field>
+    446 -          <legend>#${index + 1}</legend>
+    447 -          <div class="mhfa-shelf-options">
+    445 +    <table class="mhfa-shelf-table" aria-label="Regalböden je Fach">
+    446 +      <thead>
+    447 +        <tr>
+    448 +          <th scope="col"></th>
+    449 +          ${[0, 1, 2, 3, 4, 5].map((option) => `<th scope="col">${option}</th>`).join("")}
+    450 +        </tr>
+    451 +      </thead>
+    452 +      <tbody>
+    453 +        ${values.map((value, index) => `
+    454 +          <tr data-shelf-field>
+    455 +            <th scope="row">#${index + 1}</th>
+    456              ${[0, 1, 2, 3, 4, 5].map((option) => `
+    449 -          <label>
+    450 -            <input type="radio" name="shelfCount${index + 1}" value="${option}" ${Number(value) === option ? "checked" : ""}>
+    451 -            <span aria-label="${option} Regalboeden"></span>
+    452 -          </label>
+    457 +              <td>
+    458 +                <label class="mhfa-shelf-dot">
+    459 +                  <input type="radio" name="shelfCount${index + 1}" value="${option}" ${Number(value) === option ? "checked" : ""}>
+    460 +                  <span aria-label="${option} Regalböden"></span>
+    461 +                </label>
+    462 +              </td>
+    463              `).join("")}
+    454 -          </div>
+    455 -        </fieldset>
+    456 -      `).join("")}
+    457 -    </div>
+    464 +          </tr>
+    465 +        `).join("")}
+    466 +      </tbody>
+    467 +    </table>
+    468    `;
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Die HTML-Tabelle ist drin. Ich muss die CSS-Regeln für die alte Regalboden-Matrix durch Tabellen-Styles ersetzen und die Titel-Schrift sicher fett setzen.
+
+• Edited extension/content.css (+24 -30)
+    126    font-size: 13px;
+    127 +  font-weight: 700;
+    128    color: #17202a;
+        ⋮
+    227
+    227 -.mhfa-shelf-grid {
+    228 -  display: grid;
+    229 -  gap: 6px;
+    228 +.mhfa-shelf-table {
+    229 +  width: auto;
+    230 +  border-collapse: collapse;
+    231  }
+    232
+    232 -.mhfa-shelf-grid-head,
+    233 -.mhfa-shelf-field {
+    234 -  display: grid;
+    235 -  grid-template-columns: 36px repeat(6, 24px);
+    236 -  align-items: center;
+    237 -  gap: 6px;
+    233 +.mhfa-shelf-table th,
+    234 +.mhfa-shelf-table td {
+    235 +  width: 30px;
+    236 +  height: 24px;
+    237 +  padding: 0;
+    238 +  text-align: center;
+    239 +  vertical-align: middle;
+    240  }
+    241
+    240 -.mhfa-shelf-grid-head span {
+    241 -  color: #52606d;
+    242 +.mhfa-shelf-table th {
+    243 +  color: #344054;
+    244    font-size: 12px;
+    243 -  line-height: 1;
+    244 -  text-align: center;
+    245 +  font-weight: 700;
+    246  }
+    247
+    247 -.mhfa-shelf-field {
+    251 -}
+    252 -
+    253 -.mhfa-shelf-field legend {
+    254 -  padding: 0;
+    255 -  color: #344054;
+    256 -  font-size: 12px;
+    248 +.mhfa-shelf-table thead th {
+    249 +  color: #52606d;
+    250    font-weight: 600;
+        ⋮
+    252
+    260 -.mhfa-shelf-options {
+    261 -  display: contents;
+    253 +.mhfa-shelf-table tbody th {
+    254 +  width: 36px;
+    255 +  text-align: left;
+    256  }
+    257
+    264 -.mhfa-shelf-options label {
+    265 -  display: flex;
+    258 +.mhfa-shelf-dot {
+    259 +  display: inline-flex;
+    260    align-items: center;
+        ⋮
+    265
+    272 -.mhfa-shelf-options input {
+    266 +.mhfa-shelf-dot input {
+    267    position: absolute;
+        ⋮
+    271
+    278 -.mhfa-shelf-options span {
+    272 +.mhfa-shelf-dot span {
+    273    display: block;
+        ⋮
+    281
+    288 -.mhfa-shelf-options input:checked + span {
+    282 +.mhfa-shelf-dot input:checked + span {
+    283    border-color: #175cd3;
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich suche nach restlichen ASCII-Umschreibungen in sichtbaren Texten, die jetzt noch korrigiert werden sollten.
+
+• Explored
+  └ Search Dachschraegen|hinzufuegen|Hoehe|Faecher|Regalboeden|ae|oe|ue|oeffnen|schliessen|zurueck|Zurueck|Flaeche in content.js
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich korrigiere sichtbare UI-Texte in der Extension auf Umlaute. Die README kann weiterhin technische ASCII-Teile enthalten, aber sichtbare Extension-Texte sollten sauber deutsch sein.
+
+• Edited extension/content.js (+9 -9)
+    156        <div class="mhfa-section-title">
+    157 -        <h2>Dachschraegenregale</h2>
+    158 -        <button type="button" id="mhfa-add" class="mhfa-icon-button" title="Position hinzufuegen">+</button>
+    157 +        <h2>Dachschrägenregale</h2>
+    158 +        <button type="button" id="mhfa-add" class="mhfa-icon-button" title="Position hinzufügen">+</button>
+    159        </div>
+        ⋮
+    161          ? `<div class="mhfa-position-list">${roofPositions.map(renderRoofPositionButton).join("")}</div>`
+    162 -        : `<p class="mhfa-muted">Noch keine Dachschraegenregal-Position in dieser Rechnung.</p>`}
+    162 +        : `<p class="mhfa-muted">Noch keine Dachschrägenregal-Position in dieser Rechnung.</p>`}
+    163      </section>
+        ⋮
+    227      <button type="button" class="mhfa-position" data-mhfa-position-id="${escapeHtml(position.id || position.sort_order)}">
+    228 -      <span>${escapeHtml(position.description.split("\n")[0] || "Dachschraegenregal")}</span>
+    228 +      <span>${escapeHtml(position.description.split("\n")[0] || "Dachschrägenregal")}</span>
+    229        <small>${escapeHtml(detail)} · ${formatMoney(position.net_amount || position.unit_price)}</small>
+        ⋮
+    247          <h2>${position ? "Dachschrägenregal bearbeiten" : "Dachschrägenregal hinzufügen"}</h2>
+    248 -        <button type="button" id="mhfa-back" class="mhfa-tool-button" title="Zurueck" aria-label="Zurueck">
+    248 +        <button type="button" id="mhfa-back" class="mhfa-tool-button" title="Zurück" aria-label="Zurück">
+    249            <svg viewBox="0 0 24 24" aria-hidden="true">
+        ⋮
+    278        <div class="mhfa-shelf-config">
+        ⋮
+    289          <dl class="mhfa-totals">
+    290 -          <div><dt>Flaeche</dt><dd id="mhfa-area">-</dd></div>
+    290 +          <div><dt>Fläche</dt><dd id="mhfa-area">-</dd></div>
+    291            <div><dt>Einbauten</dt><dd id="mhfa-buildout-price">-</dd></div>
+        ⋮
+    633      <section>
+    634 -      <h3>Trennwaende</h3>
+    634 +      <h3>Trennwände</h3>
+    635        ${renderBomRows(bom.partitions)}
+        ⋮
+    637      <section>
+    638 -      <h3>Regalboeden</h3>
+    638 +      <h3>Regalböden</h3>
+    639        ${renderBomRows(bom.shelves)}
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich erhöhe die Version auf 0.4.3 und dokumentiere die Tabellenansicht und den Select-on-focus-Fix.
+
+    4 -  "version": "0.4.2",
+    4 +  "version": "0.4.3",
+    5    "description": "Spiegelt Rechnungsdaten aus MeinHandwerker auf der Rechnungsseite.",
+
+• Edited readme.md (+3 -2)
+     54  ```text
+     55 -0.4.2
+     55 +0.4.3
+    112 -Regalboeden je Fach werden als Matrix mit Spalten 0, 1, 2, 3, 4, 5 und runden Auswahlpunkten gesetzt.
+    112 +Regalboeden je Fach werden als HTML-Tabelle mit Spalten 0, 1, 2, 3, 4, 5 und runden Auswahlpunkten gesetzt.
+    113 +Zahlenfelder selektieren beim Fokus ihren kompletten Inhalt.
+    114  ```
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich prüfe Syntax, Manifest und ob in sichtbaren Content-Texten noch die störenden Umschreibungen übrig sind.
+
+• Explored
+  └ Search Dachschraegen|hinzufuegen|Zurueck|Faecher|Flaeche|Trennwaende|Regalboeden|mhfa-shelf-table|0.4.3 in content.js
+
+• Ran node --check extension/content.js
+  └ (no output)
+
+• Ran node -e 'const m=JSON.parse(require("fs").readFileSync("extension/manifest.json","utf8")); console.log(m.name, m.version)'
+  └ MeinHandwerker Faktura Assistent 0.4.3
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Erledigt. Version ist jetzt 0.4.3.
+
+  Geändert:
+
+  - Klick/Fokus in Maß- und Fachanzahl-Felder selektiert den kompletten Inhalt.
+  - UI-Texte korrigiert: Dachschrägenregal bearbeiten, hinzufügen, Zurück, Fächer, Fläche, Trennwände, Regalböden.
+  - Editor-Titel bleibt fett.
+  - Leere Fachanzahl wird intern weiterhin als 1 behandelt.
+  - Regalboden-Auswahl ist jetzt eine HTML-Tabelle, damit Fachnummern und Auswahlpunkte sauber in einer Zeile stehen.
+
+  Geprüft:
+
+  node --check extension/content.js
+  MeinHandwerker Faktura Assistent 0.4.3
+
+
+› der speichern button soll eine kleine lucide diskette werden und oben links neben dem "x" stehen. er ist weiterhin blau. aber solange nichts geändert ist, ist er disabled. wenn sich etwas
+  geändert hat, dann enabled. wenn ich die kalkulation mit pending changes schließen will, gibt es eine warnung.
+
+
+• Ich verschiebe Speichern in den Editor-Kopf: blaue Disketten-Schaltfläche links neben dem X, anfangs deaktiviert. Zusätzlich baue ich Dirty-State ein, damit Schließen mit ungespeicherten
+  Änderungen eine Warnung zeigt.
+
+• Explored
+  └ Read content.js, content.css
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich baue dafür eine interne Momentaufnahme der Kalkulation ein. Der Save-Button vergleicht laufend dagegen und ist nur bei Änderungen aktiv; X/Schließen fragen bei Änderungen nach.
+
+• Edited extension/content.js (+2 -1)
+    6    mode: "overview",
+    7 -  editPositionId: null
+    7 +  editPositionId: null,
+    8 +  editorSnapshot: ""
+    9  };
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Jetzt sichere ich Panel-Schließen und Editor-Schließen gegen ungespeicherte Änderungen ab.
+
+• Edited extension/content.js (+3 -0)
+    83    document.getElementById("mhfa-close")?.addEventListener("click", () => {
+    84 +    if (!confirmDiscardEditorChanges()) {
+    85 +      return;
+    86 +    }
+    87      panel.hidden = true;
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich verschiebe den Save-Button jetzt in die Editor-Titelzeile, als blaue Diskette direkt links vom X, und entferne den alten Button unten.
+
+• Edited extension/content.js (+22 -11)
+    251          <h2>${position ? "Dachschrägenregal bearbeiten" : "Dachschrägenregal hinzufügen"}</h2>
+    252 -        <button type="button" id="mhfa-back" class="mhfa-tool-button" title="Zurück" aria-label="Zurück">
+    253 -          <svg viewBox="0 0 24 24" aria-hidden="true">
+    254 -            <path d="M18 6 6 18"></path>
+    255 -            <path d="m6 6 12 12"></path>
+    256 -          </svg>
+    257 -        </button>
+    252 +        <div class="mhfa-editor-actions">
+    253 +          <button type="submit" form="mhfa-calculator" id="mhfa-save" class="mhfa-tool-button mhfa-save-button" title="Speichern" aria-label="Speichern" disabled>
+    254 +            <svg viewBox="0 0 24 24" aria-hidden="true">
+    255 +              <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8A2 2 0 0 1 21 8.8V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"></path>
+    256 +              <path d="M17 21v-7H7v7"></path>
+    257 +              <path d="M7 3v5h8"></path>
+    258 +            </svg>
+    259 +          </button>
+    260 +          <button type="button" id="mhfa-back" class="mhfa-tool-button" title="Zurück" aria-label="Zurück">
+    261 +            <svg viewBox="0 0 24 24" aria-hidden="true">
+    262 +              <path d="M18 6 6 18"></path>
+    263 +              <path d="m6 6 12 12"></path>
+    264 +            </svg>
+    265 +          </button>
+    266 +        </div>
+    267        </div>
+        ⋮
+    307          <div id="mhfa-bom" class="mhfa-bom"></div>
+    299 -      </div>
+    300 -
+    301 -      <div class="mhfa-actions">
+    302 -        <button type="submit">Speichern</button>
+    308        </div>
+        ⋮
+    312    const form = document.getElementById("mhfa-calculator");
+    308 -  document.getElementById("mhfa-back")?.addEventListener("click", renderOverview);
+    313 +  document.getElementById("mhfa-back")?.addEventListener("click", () => {
+    314 +    if (confirmDiscardEditorChanges()) {
+    315 +      renderOverview();
+    316 +    }
+    317 +  });
+    318    renderShelfFields(dimensions?.shelvesPerCompartment || [], dimensions?.compartmentCount || 0);
+        ⋮
+    332    updateCalculatorPreview();
+    333 +  mhfaState.editorSnapshot = getEditorSnapshot(form);
+    334 +  updateEditorDirtyState();
+    335  }
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich ergänze die Dirty-State-Funktionen und aktualisiere den Save-Button bei jeder Änderung.
+
+• Edited extension/content.js (+24 -0)
+    356    }
+    357 +  updateEditorDirtyState();
+    358 +}
+    359 +
+    360 +function getEditorSnapshot(form) {
+    361 +  if (!form) return "";
+    362 +  return JSON.stringify(readDimensions(form));
+    363 +}
+    364 +
+    365 +function isEditorDirty() {
+    366 +  const form = document.getElementById("mhfa-calculator");
+    367 +  return mhfaState.mode === "editor" && Boolean(form) && getEditorSnapshot(form) !== mhfaState.editorSnapshot;
+    368 +}
+    369 +
+    370 +function updateEditorDirtyState() {
+    371 +  const saveButton = document.getElementById("mhfa-save");
+    372 +  if (!saveButton) return;
+    373 +  saveButton.disabled = !isEditorDirty();
+    374 +}
+    375 +
+    376 +function confirmDiscardEditorChanges() {
+    377 +  if (!isEditorDirty()) {
+    378 +    return true;
+    379 +  }
+    380 +  return window.confirm("Es gibt ungespeicherte Änderungen. Wirklich schließen?");
+    381  }
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich passe noch die Speicher-Statusanzeige an den neuen Button an.
+
+• Edited extension/content.js (+2 -2)
+    430  function setSaving(isSaving) {
+    431 -  const button = document.querySelector("#mhfa-calculator button[type='submit']");
+    431 +  const button = document.getElementById("mhfa-save");
+    432    if (!button) return;
+    433    button.disabled = isSaving;
+    434 -  button.textContent = isSaving ? "Speichert..." : "Speichern";
+    434 +  button.classList.toggle("is-saving", isSaving);
+    435  }
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich setze beim Rücksprung in die Übersicht den Editor-State sauber zurück, damit danach keine alte Änderungserkennung weiterwirkt.
+
+• Edited extension/content.js (+4 -0)
+    135
+    136 +  mhfaState.mode = "overview";
+    137 +  mhfaState.editPositionId = null;
+    138 +  mhfaState.editorSnapshot = "";
+    139 +
+    140    const invoice = mhfaState.invoice;
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich style die neue Disketten-Schaltfläche: blau, rechts im Editor-Kopf, disabled gedimmt.
+
+• Edited extension/content.css (+21 -0)
+    134
+    135 +.mhfa-editor-actions {
+    136 +  display: flex;
+    137 +  gap: 12px;
+    138 +}
+    139 +
+    140 +#mhfa-panel .mhfa-save-button {
+    141 +  border-color: #175cd3;
+    142 +  color: #ffffff;
+    143 +  background: #175cd3;
+    147 +  background: #1849a9;
+    148 +}
+    149 +
+    150 +#mhfa-panel .mhfa-save-button:disabled {
+    151 +  border-color: #b6c2cf;
+    152 +  color: #667085;
+    153 +  background: #eef3f8;
+    154 +}
+    155 +
+    156  .mhfa-section address {
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich erhöhe die Version auf 0.5.0, weil Speichern/Dirty-State ein neues Bedienverhalten ist, und dokumentiere es kurz.
+
+• Edited extension/manifest.json (+1 -1)
+    3    "name": "MeinHandwerker Faktura Assistent",
+    4 -  "version": "0.4.3",
+
+• Edited readme.md (+4 -1)
+     54  ```text
+     55 -0.4.3
+     55 +0.5.0
+     56  ```
+    115 +wenn es ungespeicherte Aenderungen gibt. Beim Schließen mit ungespeicherten Aenderungen
+    116 +erscheint eine Warnung.
+    117  ```
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich prüfe jetzt Syntax und ob die neue Version korrekt im Manifest steht.
+
+• Ran node -e 'const m=JSON.parse(require("fs").readFileSync("extension/manifest.json","utf8")); console.log(m.name, m.version)'
+  └ MeinHandwerker Faktura Assistent 0.5.0
+
+• Ran node --check extension/content.js
+  └ (no output)
+
+• Explored
+  └ Search mhfa-save|editorSnapshot|confirmDiscardEditorChanges|mhfa-editor-actions|0.5.0 in content.js
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Erledigt. Version ist jetzt 0.5.0.
+
+  Geändert:
+
+  - Speichern sitzt jetzt oben rechts im Kalkulator-Kopf als blaues Disketten-Icon.
+  - Das Save-Icon steht links neben dem X.
+  - Save ist disabled, solange nichts geändert wurde.
+  - Sobald sich Werte ändern, wird Save enabled.
+  - Beim Schließen des Kalkulators oder Panels mit ungespeicherten Änderungen erscheint eine Warnung.
+  - Der alte Speichern-Button unten ist entfernt.
+
+  Geprüft:
+
+  node --check extension/content.js
+  MeinHandwerker Faktura Assistent 0.5.0
+
+  Chrome-Extension bitte neu laden.
+
+
+› dokumentiere das projekt in der readme. beschreibe den zweck, die installation, die voraussetzungen.
+
+
+• Ich überarbeite die README jetzt zu einer vollständigen Projektdokumentation mit Zweck, Voraussetzungen, Installation, Nutzung und Entwicklungsnotizen.
+
+• Explored
+  └ Read readme.md
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich ersetze die README durch eine klarere, vollständige Struktur. Dabei verwende ich jetzt überall dort Umlaute, wo sie im sichtbaren Text sinnvoll sind.
+
+• Added readme.md (+202 -0)
+      1 +# MeinHandwerker Faktura Assistent
+      2 +
+      3 +Chrome-Extension für die MeinHandwerker-Online-App. Die Extension öffnet auf Rechnungsseiten ein seitliches Panel und unterstützt dort die Kalkulation von Dachschrägenregal-Positionen.
+      4 +
+      5 +## Zweck
+      6 +
+      7 +Der Faktura Assistent soll Rechnungspositionen für Dachschrägenregale schneller und konsistenter erstellen. Auf einer MeinHandwerker-Rechnungsseite liest die Extension die Rechnungs-ID
+          aus der URL, lädt die Rechnung über die MeinHandwerker-API und zeigt vorhandene Dachschrägenregal-Positionen an.
+      8 +
+      9 +Aktuell kann die Extension:
+     10 +
+     11 +- Rechnungsdaten im Panel anzeigen
+     12 +- Dachschrägenregal-Positionen erkennen
+     13 +- neue Dachschrägenregal-Positionen kalkulieren und hinzufügen
+     14 +- vorhandene Dachschrägenregal-Positionen bearbeiten
+     15 +- die komplette Positionsliste der Rechnung über die API zurückschreiben
+     16 +
+     17 +## Voraussetzungen
+     18 +
+     19 +- Google Chrome oder ein Chromium-basierter Browser mit Extension-Entwicklermodus
+     20 +- Zugriff auf die MeinHandwerker-Online-App
+     21 +- gültige MeinHandwerker-API-Zugangsdaten:
+     22 +  - `client_id`
+     23 +  - `client_password` / API-Key
+     24 +- eine Rechnung im Entwurfsstatus, wenn Positionen geändert werden sollen
+     25 +
+     26 +Die API-Zugangsdaten werden lokal in Chrome über `chrome.storage.local` gespeichert. Sie bleiben bei einem Reload derselben entpackten Extension erhalten.
+     27 +
+     28 +## Installation
+     29 +
+     30 +1. `chrome://extensions` öffnen
+     31 +2. Entwicklermodus aktivieren
+     32 +3. "Entpackte Erweiterung laden" wählen
+     33 +4. Den Ordner `extension/` auswählen
+     34 +5. Eine MeinHandwerker-Rechnungsseite öffnen
+     35 +6. Das Extension-Icon klicken
+     36 +7. Im Panel `client_id` und API-Key speichern
+     37 +
+     38 +Die Extension liegt in diesem Repository unter:
+     39 +
+     40 +```text
+     41 +extension/
+     42 +```
+     43 +
+     44 +Aktuelle Version:
+     45 +
+     46 +```text
+     47 +0.5.0
+     48 +```
+     49 +
+     50 +## Nutzung
+     51 +
+     52 +Die Extension wird automatisch auf Rechnungsseiten geladen, deren URL so beginnt:
+     53 +
+     54 +```text
+     55 +https://verwaltung.mein-handwerker-app.de/billing/edit/
+     56 +```
+     57 +
+     58 +Die Rechnungs-ID wird aus dem letzten URL-Segment gelesen, z.B. `43928` aus:
+     59 +
+     60 +```text
+     61 +https://verwaltung.mein-handwerker-app.de/billing/edit/43928
+     62 +```
+     63 +
+     64 +Bedienung:
+     65 +
+     66 +```text
+     67 +Extension-Icon: Panel auf einer passenden Rechnungsseite öffnen
+     68 +Schlüssel-Icon: client_id und API-Key im Panel bearbeiten
+     69 +Reload-Icon: Rechnungsdaten neu laden
+     70 +X-Icon: Panel schließen
+     71 +```
+     72 +
+     73 +Wenn auf einer unpassenden Seite auf das Extension-Icon geklickt wird, erscheint ein Hinweis mit der Option, zu `https://verwaltung.mein-handwerker-app.de/` zu wechseln.
+     74 +
+     75 +## Dachschrägenregal-Kalkulator
+     76 +
+     77 +Eine relevante Rechnungsposition wird aktuell am Wort `Dachschrägenregal` in der Positionsbeschreibung erkannt.
+     78 +
+     79 +Kalkulationsfelder:
+     80 +
+     81 +```text
+     82 +Breite in cm
+     83 +Höhe außen in cm
+     84 +Höhe innen in cm
+     85 +Außenseite: links oder rechts
+     86 +Fächer
+     87 +Regalböden je Fach
+     88 +```
+     89 +
+     90 +Formularverhalten:
+     91 +
+     92 +- Breite, Höhe außen und Höhe innen stehen kompakt in einer Zeile mit Platzhaltern.
+     93 +- Außenseite wird über zwei Chips gewählt.
+     94 +- Regalbodenanzahlen werden je Fach als Tabelle mit Spalten `0`, `1`, `2`, `3`, `4`, `5` gesetzt.
+     95 +- Zahlenfelder selektieren beim Fokus ihren kompletten Inhalt.
+     96 +- Der Speichern-Button sitzt im Kalkulator-Kopf als blaues Disketten-Icon.
+     97 +- Speichern ist nur aktiv, wenn es ungespeicherte Änderungen gibt.
+     98 +- Beim Schließen mit ungespeicherten Änderungen erscheint eine Warnung.
+     99 +
+    100 +Die Korpuszeichnung im Kalkulator wird maßstabsgerecht mit einem gemeinsamen Skalierungsfaktor für Breite und Höhe gezeichnet.
+    101 +
+    102 +Preisformel:
+    103 +
+    104 +```text
+    105 +Fläche = Breite * ((Höhe außen + Höhe innen) / 2)
+    106 +Grundpreis netto = Fläche in m² * 500 EUR
+    107 +Trennwände = 25 EUR pro laufendem Meter
+    108 +Regalböden = 20 EUR pro laufendem Meter
+    109 +```
+    110 +
+    111 +## Positionsbeschreibung
+    112 +
+    113 +Beim Speichern schreibt die Extension alle Kalkulationsdaten in die Positionsbeschreibung, damit die Position später wieder erkannt und bearbeitet werden kann.
+    114 +
+    115 +Beispiel:
+    116 +
+    117 +```text
+    118 +Dachschrägenregal
+    119 +Abbmessungen: 200cm Breite, 0cm Höhe außen, 150cm Höhe innen
+    120 +Außenseite: links
+    121 +Fächer: 4
+    122 +Regalböden je Fach: 1, 2, 0, 1
+    123 +```
+    124 +
+    125 +Preise werden nicht in die Positionsbeschreibung geschrieben. Der berechnete Nettopreis wird als `unit_price` der Rechnungsposition gespeichert.
+    126 +
+    127 +## API
+    128 +
+    129 +OpenAPI/Swagger-Dokumentation:
+    130 +
+    131 +```text
+    132 +https://verwaltung.mein-handwerker-app.de/api_doku
+    133 +```
+    134 +
+    135 +Direkter OpenAPI-JSON-Pfad für maschinelles Auslesen:
+    136 +
+    137 +```text
+    138 +https://verwaltung.mein-handwerker-app.de/public/Api_dokumentation
+    139 +```
+    140 +
+    141 +API-Basis-URL für Requests:
+    142 +
+    143 +```text
+    144 +https://verwaltung.mein-handwerker-app.de/public/MH_Api
+    145 +```
+    146 +
+    147 +Authentifizierung:
+    148 +
+    149 +```text
+    150 +client_id       = MEINHANDWERKER_CLIENTID aus .env
+    151 +client_password = MEINHANDWERKER_API_KEY aus .env
+    152 +```
+    153 +
+    154 +Verbindungstest:
+    155 +
+    156 +```bash
+    157 +curl -X POST "https://verwaltung.mein-handwerker-app.de/public/MH_Api/check_password_validation" \
+    158 +  -H "Content-Type: application/json" \
+    159 +  -d '{"client_id":"<client_id>","client_password":"<api_key>"}'
+    160 +```
+    161 +
+    162 +Die Extension verwendet aktuell:
+    166 +GET  /get_customers
+    167 +POST /update_invoice
+    168 +```
+    169 +
+    170 +Wichtig: `update_invoice` ersetzt die komplette Positionsliste, wenn `positions` mitgegeben wird. Deshalb liest die Extension die vorhandenen Positionen, ersetzt oder ergänzt die Dachs
+         chrägenregal-Position und schreibt anschließend die komplette Liste zurück.
+    171 +
+    172 +## Entwicklung
+    173 +
+    174 +Die Extension ist eine Manifest-V3-Extension ohne Build-Schritt.
+    175 +
+    176 +Wichtige Dateien:
+    177 +
+    178 +```text
+    179 +extension/manifest.json
+    180 +extension/background.js
+    181 +extension/content.js
+    182 +extension/content.css
+    183 +```
+    184 +
+    185 +Syntaxcheck:
+    186 +
+    187 +```bash
+    188 +node --check extension/background.js
+    197 +
+    198 +Layout-Regel:
+    199 +
+    200 +```text
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Die README ist neu strukturiert. Ich prüfe kurz, ob Version und API-Hinweise konsistent sind.
+
+• Explored
+  └ Read readme.md
+
+• Ran git status --short
+  └  M readme.md
+
+• Ran node -e 'const m=JSON.parse(require("fs").readFileSync("extension/manifest.json","utf8")); console.log(m.version)'
+  └ 0.5.0
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Erledigt. Die readme.md ist jetzt als Projektdokumentation aufgebaut.
+
+  Enthalten sind jetzt:
+
+  - Zweck des Projekts
+  - Voraussetzungen
+  - lokale Chrome-Installation
+  - Nutzung der Extension
+  - Dachschrägenregal-Kalkulator
+  - Positionsbeschreibung
+  - API-Basisdaten und Authentifizierung
+  - verwendete API-Endpunkte
+  - Entwicklungsnotizen
+  - Semantic Versioning
+  - 12x12px-Layoutregel
+
+  Version in README und Manifest ist konsistent: 0.5.0.
+
+
+› es gibt noch ein detail: wenn ich eine rechnung anlege, bin ich noch nicht in der richtigen rechnungsbearbeitung. bei der rechnungsbearbeitung ist die URL
+  https://verwaltung.mein-handwerker-app.de/billing/edit/44109 und die extension erkennt das korrekt und wird aktiv.
+
+  davor ist die rechnung noch nicht als draft gespeichert, sondern irgendwie in einem zwischenzustand. da sieht die URL so aus:
+  https://verwaltung.mein-handwerker-app.de/billing/create_billing/1526229
+
+  kannst du damit etwas anfangen? wofür steht die zahl am ende? mir scheint, das ist eine projektnummer. eine rechnung wird immer in einem projekt angelegt. solange sie nicht als draft
+  gespeichert ist, gibt es nichts an positionen hinzuzufügen für die extension. aber ich kann sie im user interface nur speichern, wenn schon eine position hinzugefügt ist. das ist irgendwie
+  mist. oder siehst du eine andere möglichkeit?
+
+
+• Ja, damit kann ich etwas anfangen.
+
+  https://verwaltung.mein-handwerker-app.de/billing/create_billing/1526229
+
+  ist sehr wahrscheinlich die construction_id, also die Projekt-ID. In deinem Fall passt das exakt: 1526229 war das Projekt Dachausbau.
+
+  Das Modell ist also:
+
+
+  Erst nach dem Speichern entsteht dann z.B.:
+
+  /billing/edit/44109
+
+  Dabei ist 44109 die invoice_id.
+
+  Das Problem ist real: Solange es keine invoice_id gibt, kann die Extension keine bestehende Rechnung laden oder Positionen per update_invoice ändern.
+
+  Die beste Lösung wäre:
+
+  1. Extension auch auf dieser URL aktivieren:
+
+  https://verwaltung.mein-handwerker-app.de/billing/create_billing/*
+
+  2. Dort erkennt sie die construction_id.
+  3. Statt vorhandene Positionen zu bearbeiten, zeigt sie direkt den Dachschrägenregal-Kalkulator.
+  4. Beim Speichern ruft sie nicht update_invoice, sondern:
+
+  POST /insert_invoice
+
+  mit:
+
+  {
+    "construction_id": 1526229,
+    "positions": [...]
+  }
+
+  5. Die API legt daraus sofort einen Rechnungsentwurf an und liefert invoice_id.
+  6. Danach leitet die Extension automatisch weiter auf:
+
+  https://verwaltung.mein-handwerker-app.de/billing/edit/{invoice_id}
+
+  Das wäre sauberer als eine Dummy-Position im UI anzulegen. Die API braucht beim Erstellen zwar mindestens eine Position, aber genau die kann aus der ersten Kalkulation kommen. Dann entsteht
+  direkt ein echter Entwurf mit der richtigen ersten Position.
+
+
+› ok, dann mach das doch mal
+
+
+• Ich erweitere die Extension auf den create_billing/{construction_id}-Zustand. Dort startet sie ohne Rechnungs-ID direkt im Kalkulator und erstellt beim Speichern per insert_invoice einen
+  neuen Entwurf, danach leite ich auf /billing/edit/{invoice_id} weiter.
+
+• Explored
+  └ Read content.js, manifest.json, background.js
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich passe jetzt die Routing-Logik an: edit/{invoice_id} bleibt wie bisher, create_billing/{construction_id} wird als eigener Modus behandelt. Im Create-Modus gibt es noch keine Übersicht,
+  sondern direkt den Kalkulator für die erste Position.
+
+• Edited extension/manifest.json (+2 -1)
+    15        "matches": [
+    16 -        "https://verwaltung.mein-handwerker-app.de/billing/edit/*"
+    16 +        "https://verwaltung.mein-handwerker-app.de/billing/edit/*",
+    17 +        "https://verwaltung.mein-handwerker-app.de/billing/create_billing/*"
+    18        ],
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Jetzt erweitere ich Background-Service-Worker um die Create-URL, Toolbar-Öffnen und insert_invoice.
+
+• Edited extension/background.js (+27 -1)
+      3  const BILLING_EDIT_PATTERN = /^https:\/\/verwaltung\.mein-handwerker-app\.de\/billing\/edit\/\d+\/?$/;
+      4 +const BILLING_CREATE_PATTERN = /^https:\/\/verwaltung\.mein-handwerker-app\.de\/billing\/create_billing\/\d+\/?$/;
+      5
+        ⋮
+     10
+     10 -  if (!BILLING_EDIT_PATTERN.test(tab.url)) {
+     11 +  if (!BILLING_EDIT_PATTERN.test(tab.url) && !BILLING_CREATE_PATTERN.test(tab.url)) {
+     12      await offerOpenMeinHandwerker(tab.id);
+        ⋮
+     44
+     45 +  if (message?.type === "createInvoice") {
+     46 +    createInvoice(message.constructionId, message.positions)
+     47 +      .then((data) => sendResponse({ ok: true, data }))
+     48 +      .catch((error) => sendResponse({ ok: false, error: error.message }));
+     49 +    return true;
+     50 +  }
+     51 +
+     52    if (message?.type === "openOptions") {
+        ⋮
+    110
+    111 +async function createInvoice(constructionId, positions) {
+    112 +  const config = await chrome.storage.local.get(["clientId", "clientPassword"]);
+    113 +  if (!config.clientId || !config.clientPassword) {
+    114 +    throw new Error("Bitte client_id und API-Key im Panel hinterlegen.");
+    115 +  }
+    116 +
+    117 +  if (!Array.isArray(positions) || positions.length === 0) {
+    118 +    throw new Error("Mindestens eine Rechnungsposition ist erforderlich.");
+    119 +  }
+    120 +
+    121 +  return postJson("/insert_invoice", {
+    122 +    client_id: config.clientId,
+    123 +    client_password: config.clientPassword,
+    124 +    construction_id: Number(constructionId),
+    125 +    positions
+    126 +  });
+    127 +}
+    128 +
+    129  async function getCustomer(config, customerId) {
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich ändere jetzt den Content-Script-Zustand und die URL-Erkennung, damit create_billing/{construction_id} direkt im Kalkulator landet.
+
+• Edited extension/content.js (+43 -11)
+      2  let mhfaState = {
+      3 +  pageMode: "edit",
+      4    invoiceId: null,
+      5 +  constructionId: null,
+      6    invoice: null,
+        ⋮
+     25  function openAssistantPanel() {
+     24 -  const invoiceId = getInvoiceId(window.location.pathname);
+     25 -  if (!invoiceId) {
+     26 +  const context = getBillingContext(window.location.pathname);
+     27 +  if (!context) {
+     28      return;
+        ⋮
+     30
+     29 -  mhfaState.invoiceId = invoiceId;
+     31 +  mhfaState.pageMode = context.mode;
+     32 +  mhfaState.invoiceId = context.invoiceId || null;
+     33 +  mhfaState.constructionId = context.constructionId || null;
+     34
+        ⋮
+     37      existingPanel.hidden = false;
+     34 -    if (mhfaState.invoice) {
+     38 +    if (mhfaState.pageMode === "create") {
+     39 +      startCreateMode();
+     40 +    } else if (mhfaState.invoice) {
+     41        renderOverview();
+     42      } else {
+     37 -      loadInvoice(invoiceId);
+     43 +      loadInvoice(mhfaState.invoiceId);
+     44      }
+        ⋮
+     53          <strong>Faktura Assistent</strong>
+     48 -        <span>Rechnung ${escapeHtml(invoiceId)}</span>
+     54 +        <span>${escapeHtml(getPanelSubtitle())}</span>
+     55        </div>
+        ⋮
+     87    document.getElementById("mhfa-settings")?.addEventListener("click", () => renderSettings());
+     82 -  document.getElementById("mhfa-refresh")?.addEventListener("click", () => loadInvoice(invoiceId));
+     88 +  document.getElementById("mhfa-refresh")?.addEventListener("click", () => {
+     89 +    if (mhfaState.pageMode === "create") {
+     90 +      startCreateMode();
+     91 +    } else {
+     92 +      loadInvoice(mhfaState.invoiceId);
+     93 +    }
+     94 +  });
+     95    document.getElementById("mhfa-close")?.addEventListener("click", () => {
+        ⋮
+    100    });
+     89 -  loadInvoice(invoiceId);
+    101 +  if (mhfaState.pageMode === "create") {
+    102 +    startCreateMode();
+    103 +  } else {
+    104 +    loadInvoice(mhfaState.invoiceId);
+    105 +  }
+    106  }
+    107
+     92 -function getInvoiceId(pathname) {
+     93 -  const match = pathname.match(/^\/billing\/edit\/(\d+)\/?$/);
+     94 -  return match ? match[1] : null;
+    108 +function getBillingContext(pathname) {
+    109 +  const editMatch = pathname.match(/^\/billing\/edit\/(\d+)\/?$/);
+    110 +  if (editMatch) {
+    111 +    return { mode: "edit", invoiceId: editMatch[1] };
+    112 +  }
+    113 +
+    114 +  const createMatch = pathname.match(/^\/billing\/create_billing\/(\d+)\/?$/);
+    115 +  if (createMatch) {
+    116 +    return { mode: "create", constructionId: createMatch[1] };
+    117 +  }
+    118 +
+    119 +  return null;
+    120 +}
+    121 +
+    122 +function getPanelSubtitle() {
+    123 +  if (mhfaState.pageMode === "create") {
+    124 +    return `Neue Rechnung für Projekt ${mhfaState.constructionId}`;
+    125 +  }
+    126 +  return `Rechnung ${mhfaState.invoiceId}`;
+    127  }
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich ergänze die Startlogik für Create-Modus und passe die Settings-Speicherung an, damit sie nach Eingabe der Zugangsdaten den richtigen Modus öffnet.
+
+• Edited extension/content.js (+21 -1)
+    163
+    164 +function startCreateMode() {
+    165 +  const content = document.getElementById("mhfa-content");
+    166 +  if (!content) return;
+    167 +
+    168 +  chrome.storage.local.get(["clientId", "clientPassword"], (config) => {
+    169 +    if (!config.clientId || !config.clientPassword) {
+    170 +      renderSettings("Bitte client_id und API-Key eintragen.");
+    171 +      return;
+    172 +    }
+    173 +
+    174 +    mhfaState.invoice = null;
+    175 +    mhfaState.customer = null;
+    176 +    renderEditor();
+    177 +  });
+    178 +}
+    179 +
+    180  function renderOverview() {
+        ⋮
+    269        }, () => {
+    254 -        loadInvoice(mhfaState.invoiceId);
+    270 +        if (mhfaState.pageMode === "create") {
+    271 +          startCreateMode();
+    272 +        } else {
+    273 +          loadInvoice(mhfaState.invoiceId);
+    274 +        }
+    275        });
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Der Editor erwartet aktuell eine geladene Rechnung. Ich öffne ihn jetzt auch im Create-Modus und ändere den Zurück-Button dort zum Panel-Schließen.
+
+• Edited extension/content.js (+8 -3)
+    295    const content = document.getElementById("mhfa-content");
+    296 -  if (!content || !mhfaState.invoice) return;
+    296 +  if (!content || (mhfaState.pageMode !== "create" && !mhfaState.invoice)) return;
+    297
+        ⋮
+    299    const dimensions = position ? parseRoofDimensions(position.description) : null;
+    300 +  const isCreateMode = mhfaState.pageMode === "create";
+    301
+        ⋮
+    307        <div class="mhfa-section-title">
+    307 -        <h2>${position ? "Dachschrägenregal bearbeiten" : "Dachschrägenregal hinzufügen"}</h2>
+    308 +        <h2>${position ? "Dachschrägenregal bearbeiten" : isCreateMode ? "Erste Position kalkulieren" : "Dachschrägenregal hinzufügen"}</h2>
+    309          <div class="mhfa-editor-actions">
+        ⋮
+    371      if (confirmDiscardEditorChanges()) {
+    371 -      renderOverview();
+    372 +      if (mhfaState.pageMode === "create") {
+    373 +        document.getElementById("mhfa-panel").hidden = true;
+    374 +      } else {
+    375 +        renderOverview();
+    376 +      }
+    377      }
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Jetzt ändere ich das Speichern: Im Create-Modus wird insert_invoice mit der ersten Position aufgerufen und danach zur neuen Bearbeitungs-URL weitergeleitet.
+
+• Edited extension/content.js (+24 -6)
+    449    const calculation = calculateRoofSlope(dimensions);
+    450 -  const positions = getPositions(mhfaState.invoice).map(toUpdatePosition);
+    450 +  const positions = mhfaState.pageMode === "create" ? [] : getPositions(mhfaState.invoice).map(toUpdatePosition);
+    451    const updatedPosition = {
+        ⋮
+    469    setSaving(true);
+    470 -  chrome.runtime.sendMessage({
+    471 -    type: "updateInvoicePositions",
+    472 -    invoiceId: mhfaState.invoiceId,
+    473 -    positions
+    474 -  }, (response) => {
+    470 +  const message = mhfaState.pageMode === "create"
+    471 +    ? {
+    472 +        type: "createInvoice",
+    473 +        constructionId: mhfaState.constructionId,
+    474 +        positions
+    475 +      }
+    476 +    : {
+    477 +        type: "updateInvoicePositions",
+    478 +        invoiceId: mhfaState.invoiceId,
+    479 +        positions
+    480 +      };
+    481 +
+    482 +  chrome.runtime.sendMessage(message, (response) => {
+    483      setSaving(false);
+        ⋮
+    494
+    495 +    if (mhfaState.pageMode === "create") {
+    496 +      const invoiceId = response.data?.invoice_id;
+    497 +      if (!invoiceId) {
+    498 +        renderSaveError("Rechnung wurde angelegt, aber die API hat keine invoice_id zurückgegeben.");
+    499 +        return;
+    500 +      }
+    501 +      window.location.href = `https://verwaltung.mein-handwerker-app.de/billing/edit/${invoiceId}`;
+    502 +      return;
+    503 +    }
+    504 +
+    505      window.location.reload();
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich entferne noch die Pflichtmarkierung bei Fächer, weil leer intern als 1 gelten soll. Danach erhöhe ich die Version und dokumentiere den Create-Billing-Modus.
+
+• Edited extension/content.js (+1 -1)
+    346        <div class="mhfa-form-divider"></div>
+    347 -      <input name="compartmentCount" type="number" min="1" step="1" placeholder="Fächer" value="${escapeHtml(dimensions?.compartmentCount ?? "")}" required>
+    347 +      <input name="compartmentCount" type="number" min="1" step="1" placeholder="Fächer" value="${escapeHtml(dimensions?.compartmentCount ?? "")}">
+    348        <div class="mhfa-shelf-config">
+
+• Edited extension/manifest.json (+1 -1)
+    3    "name": "MeinHandwerker Faktura Assistent",
+    4 -  "version": "0.5.0",
+    4 +  "version": "0.6.0",
+    5    "description": "Spiegelt Rechnungsdaten aus MeinHandwerker auf der Rechnungsseite.",
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich aktualisiere jetzt die README um die neue URL und den Ablauf: create_billing/{construction_id} erzeugt per API einen Entwurf und springt dann zu edit/{invoice_id}.
+     47 -0.5.0
+     47 +0.6.0
+     48  ```
+        ⋮
+     55  https://verwaltung.mein-handwerker-app.de/billing/edit/
+     56 +https://verwaltung.mein-handwerker-app.de/billing/create_billing/
+     57  ```
+        ⋮
+     64
+     65 +Beim Erstellen einer noch nicht gespeicherten Rechnung steht in der URL statt einer Rechnungs-ID die Projekt-ID:
+     66 +
+     67 +```text
+     68 +https://verwaltung.mein-handwerker-app.de/billing/create_billing/1526229
+     69 +```
+     70 +
+     71 +In diesem Zustand gibt es noch keine `invoice_id` und keine gespeicherte Positionsliste. Die Extension startet deshalb direkt mit dem Kalkulator für die erste Dachschrägenregal-Positio
+         n. Beim Speichern ruft sie `insert_invoice` auf, legt damit einen Rechnungsentwurf für die `construction_id` an und leitet anschließend auf die Bearbeitungsseite weiter:
+     72 +
+     73 +```text
+     74 +https://verwaltung.mein-handwerker-app.de/billing/edit/{invoice_id}
+     75 +```
+     76 +
+     77  Bedienung:
+        ⋮
+    177  ```text
+    178 +POST /insert_invoice
+    179  POST /get_invoice
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ich prüfe jetzt Syntax und Manifest.
+
+• Ran node --check extension/background.js
+  └ (no output)
+
+• Ran node --check extension/content.js
+  └ (no output)
+
+• Ran node -e 'const m=JSON.parse(require("fs").readFileSync("extension/manifest.json","utf8")); console.log(m.name, m.version); console.log(m.content_scripts[0].matches.join("\n"))'
+  └ MeinHandwerker Faktura Assistent 0.6.0
+    https://verwaltung.mein-handwerker-app.de/billing/edit/*
+    https://verwaltung.mein-handwerker-app.de/billing/create_billing/*
+
+• Explored
+  └ Search create_billing|createInvoice|insert_invoice|0.6.0|constructionId|pageMode in extension
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Erledigt. Die Extension unterstützt jetzt auch den Zwischenzustand:
+
+  https://verwaltung.mein-handwerker-app.de/billing/create_billing/{construction_id}
+
+  Version ist jetzt 0.6.0.
+
+  Umgesetzt:
+
+  - Content-Script läuft nun auch auf /billing/create_billing/*.
+  - Die Zahl am Ende wird als construction_id behandelt.
+  - In diesem Modus startet das Panel direkt mit dem Kalkulator für die erste Position.
+  - Beim Speichern ruft die Extension POST /insert_invoice auf.
+  - Nach erfolgreichem Anlegen wird automatisch weitergeleitet auf:
+
+  https://verwaltung.mein-handwerker-app.de/billing/edit/{invoice_id}
+
+  - Fächer darf leer bleiben und wird intern als 1 behandelt.
+  - README ist aktualisiert.
+
+  Geprüft:
+
+  node --check extension/background.js
+  node --check extension/content.js
+  MeinHandwerker Faktura Assistent 0.6.0
+
+  Chrome-Extension bitte neu laden.
+
+ 
+› Explain this codebase
+ 
+  gpt-5.5 medium · ~/Repositories/08 Vibe Coding/MeinHandwerker

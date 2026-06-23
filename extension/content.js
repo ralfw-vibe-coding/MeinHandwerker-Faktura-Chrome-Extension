@@ -344,7 +344,7 @@ function renderEditor(positionId = null) {
       </fieldset>
 
       <div class="mhfa-form-divider"></div>
-      <input name="compartmentCount" type="number" min="1" step="1" placeholder="Fächer" value="${escapeHtml(dimensions?.compartmentCount ?? "")}">
+      <input name="compartmentCount" type="number" min="1" step="1" placeholder="Fächer" value="${escapeHtml(dimensions?.compartmentCount ?? 1)}">
       <div class="mhfa-shelf-config">
         <div class="mhfa-small-label">Regalböden je Fach:</div>
         <div id="mhfa-shelf-fields" class="mhfa-shelf-fields"></div>
